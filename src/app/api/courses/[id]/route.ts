@@ -23,10 +23,10 @@ export async function PUT(
       },
       include: {
         client: {
-          select: { nom: true, telephone: true }
+          select: { id: true, nom: true, prenom: true, telephone: true }
         },
         chauffeur: {
-          select: { nom: true, vehicule: true }
+          select: { id: true, nom: true, prenom: true, vehicule: true }
         }
       }
     })

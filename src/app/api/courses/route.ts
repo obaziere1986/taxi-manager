@@ -7,10 +7,10 @@ export async function GET() {
       orderBy: { createdAt: 'desc' },
       include: {
         client: {
-          select: { nom: true, prenom: true, telephone: true }
+          select: { id: true, nom: true, prenom: true, telephone: true }
         },
         chauffeur: {
-          select: { nom: true, prenom: true, vehicule: true }
+          select: { id: true, nom: true, prenom: true, vehicule: true }
         }
       }
     })
@@ -37,10 +37,10 @@ export async function POST(request: NextRequest) {
       },
       include: {
         client: {
-          select: { nom: true, prenom: true, telephone: true }
+          select: { id: true, nom: true, prenom: true, telephone: true }
         },
         chauffeur: {
-          select: { nom: true, prenom: true, vehicule: true }
+          select: { id: true, nom: true, prenom: true, vehicule: true }
         }
       }
     })
