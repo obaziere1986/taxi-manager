@@ -1,0 +1,470 @@
+"use client"
+
+import { useState, useEffect } from 'react'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Badge } from '@/components/ui/badge'
+import { Plus, MapPin, Clock, User, Car, Edit, Trash2 } from 'lucide-react'
+
+interface Course {
+  id: string
+  origine: string
+  destination: string
+  dateHeure: string
+  statut: 'EN_ATTENTE' | 'ASSIGNEE' | 'EN_COURS' | 'TERMINEE' | 'ANNULEE'
+  prix: number | null
+  notes: string | null
+  client: {
+    nom: string
+    telephone: string
+  }
+  chauffeur: {
+    nom: string
+    vehicule: string
+  } | null
+}
+
+interface Client {
+  id: string
+  nom: string
+}
+
+interface Chauffeur {
+  id: string
+  nom: string
+  vehicule: string
+}
+
+const statutLabels = {
+  EN_ATTENTE: { label: 'En attente', color: 'bg-gray-500' },
+  ASSIGNEE: { label: 'Assignée', color: 'bg-blue-500' },
+  EN_COURS: { label: 'En cours', color: 'bg-orange-500' },
+  TERMINEE: { label: 'Terminée', color: 'bg-green-500' },
+  ANNULEE: { label: 'Annulée', color: 'bg-red-500' }
+}
+
+export default function CoursesPage() {
+  const [courses, setCourses] = useState<Course[]>([])
+  const [clients, setClients] = useState<Client[]>([])
+  const [chauffeurs, setChauffeurs] = useState<Chauffeur[]>([])
+  const [loading, setLoading] = useState(true)
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [editingCourse, setEditingCourse] = useState<Course | null>(null)
+  const [formData, setFormData] = useState({
+    origine: '',
+    destination: '',
+    dateHeure: '',
+    clientId: '',
+    chauffeurId: '',
+    prix: '',
+    notes: '',
+    statut: 'EN_ATTENTE'
+  })
+
+  useEffect(() => {
+    fetchData()
+  }, [])
+
+  const fetchData = async () => {
+    try {
+      const [coursesRes, clientsRes, chauffeursRes] = await Promise.all([
+        fetch('/api/courses'),
+        fetch('/api/clients'),
+        fetch('/api/chauffeurs')
+      ])
+
+      const [coursesData, clientsData, chauffeursData] = await Promise.all([
+        coursesRes.json(),
+        clientsRes.json(),
+        chauffeursRes.json()
+      ])
+
+      setCourses(coursesData)
+      setClients(clientsData)
+      setChauffeurs(chauffeursData)
+    } catch (error) {
+      console.error('Erreur lors du chargement des données:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    try {
+      const url = editingCourse ? `/api/courses/${editingCourse.id}` : '/api/courses'
+      const method = editingCourse ? 'PUT' : 'POST'
+
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData),
+      })
+
+      if (response.ok) {
+        resetForm()
+        fetchData()
+      }
+    } catch (error) {
+      console.error('Erreur lors de la sauvegarde:', error)
+    }
+  }
+
+  const handleEdit = (course: Course) => {
+    setEditingCourse(course)
+    setFormData({
+      origine: course.origine,
+      destination: course.destination,
+      dateHeure: new Date(course.dateHeure).toISOString().slice(0, 16),
+      clientId: course.client ? course.client.nom : '',
+      chauffeurId: course.chauffeur?.nom || '',
+      prix: course.prix?.toString() || '',
+      notes: course.notes || '',
+      statut: course.statut
+    })
+    setIsDialogOpen(true)
+  }
+
+  const updateStatut = async (courseId: string, newStatut: string) => {
+    try {
+      const course = courses.find(c => c.id === courseId)
+      if (!course) return
+
+      const response = await fetch(`/api/courses/${courseId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ...course,
+          statut: newStatut,
+          dateHeure: course.dateHeure,
+          clientId: course.client?.nom,
+          chauffeurId: course.chauffeur?.nom || null
+        }),
+      })
+
+      if (response.ok) {
+        fetchData()
+      }
+    } catch (error) {
+      console.error('Erreur lors de la mise à jour du statut:', error)
+    }
+  }
+
+  const handleDelete = async (id: string) => {
+    if (confirm('Êtes-vous sûr de vouloir supprimer cette course ?')) {
+      try {
+        const response = await fetch(`/api/courses/${id}`, {
+          method: 'DELETE',
+        })
+        if (response.ok) {
+          fetchData()
+        }
+      } catch (error) {
+        console.error('Erreur lors de la suppression:', error)
+      }
+    }
+  }
+
+  const resetForm = () => {
+    setFormData({
+      origine: '',
+      destination: '',
+      dateHeure: '',
+      clientId: '',
+      chauffeurId: '',
+      prix: '',
+      notes: '',
+      statut: 'EN_ATTENTE'
+    })
+    setEditingCourse(null)
+    setIsDialogOpen(false)
+  }
+
+  if (loading) {
+    return (
+      <div className="flex-1 space-y-4 p-8 pt-6">
+        <div className="flex items-center justify-between space-y-2">
+          <h2 className="text-3xl font-bold tracking-tight">Courses</h2>
+        </div>
+        <div>Chargement...</div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex-1 space-y-4 p-8 pt-6">
+      <div className="flex items-center justify-between space-y-2">
+        <h2 className="text-3xl font-bold tracking-tight">Courses</h2>
+        <Dialog open={isDialogOpen} onOpenChange={(open) => {
+          if (!open) resetForm()
+          setIsDialogOpen(open)
+        }}>
+          <DialogTrigger asChild>
+            <Button>
+              <Plus className="mr-2 h-4 w-4" />
+              Nouvelle course
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+              <DialogTitle>
+                {editingCourse ? 'Modifier la course' : 'Nouvelle course'}
+              </DialogTitle>
+              <DialogDescription>
+                {editingCourse 
+                  ? 'Modifiez les détails de la course.'
+                  : 'Créer une nouvelle course pour vos clients.'
+                }
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="origine">Origine *</Label>
+                  <Input
+                    id="origine"
+                    value={formData.origine}
+                    onChange={(e) => setFormData({ ...formData, origine: e.target.value })}
+                    placeholder="Adresse de départ"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="destination">Destination *</Label>
+                  <Input
+                    id="destination"
+                    value={formData.destination}
+                    onChange={(e) => setFormData({ ...formData, destination: e.target.value })}
+                    placeholder="Adresse d'arrivée"
+                    required
+                  />
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="dateHeure">Date et heure *</Label>
+                <Input
+                  id="dateHeure"
+                  type="datetime-local"
+                  value={formData.dateHeure}
+                  onChange={(e) => setFormData({ ...formData, dateHeure: e.target.value })}
+                  required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="clientId">Client *</Label>
+                <Select
+                  value={formData.clientId}
+                  onValueChange={(value) => setFormData({ ...formData, clientId: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Sélectionner un client" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {clients.map((client) => (
+                      <SelectItem key={client.id} value={client.id}>
+                        {client.nom}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="chauffeurId">Chauffeur</Label>
+                <Select
+                  value={formData.chauffeurId}
+                  onValueChange={(value) => setFormData({ ...formData, chauffeurId: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Assigner un chauffeur (optionnel)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {chauffeurs.map((chauffeur) => (
+                      <SelectItem key={chauffeur.id} value={chauffeur.id}>
+                        {chauffeur.nom} - {chauffeur.vehicule}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="prix">Prix (€)</Label>
+                  <Input
+                    id="prix"
+                    type="number"
+                    step="0.01"
+                    value={formData.prix}
+                    onChange={(e) => setFormData({ ...formData, prix: e.target.value })}
+                    placeholder="45.50"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="statut">Statut</Label>
+                  <Select
+                    value={formData.statut}
+                    onValueChange={(value) => setFormData({ ...formData, statut: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="EN_ATTENTE">En attente</SelectItem>
+                      <SelectItem value="ASSIGNEE">Assignée</SelectItem>
+                      <SelectItem value="EN_COURS">En cours</SelectItem>
+                      <SelectItem value="TERMINEE">Terminée</SelectItem>
+                      <SelectItem value="ANNULEE">Annulée</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="notes">Notes</Label>
+                <Input
+                  id="notes"
+                  value={formData.notes}
+                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                  placeholder="Instructions spéciales..."
+                />
+              </div>
+
+              <div className="flex justify-end space-x-2">
+                <Button type="button" variant="outline" onClick={resetForm}>
+                  Annuler
+                </Button>
+                <Button type="submit">
+                  {editingCourse ? 'Modifier' : 'Créer'}
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Liste des courses</CardTitle>
+          <CardDescription>
+            Gérez toutes les courses et suivez leur progression.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Trajet</TableHead>
+                <TableHead>Client</TableHead>
+                <TableHead>Chauffeur</TableHead>
+                <TableHead>Date/Heure</TableHead>
+                <TableHead>Statut</TableHead>
+                <TableHead>Prix</TableHead>
+                <TableHead>Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {courses.map((course) => (
+                <TableRow key={course.id}>
+                  <TableCell>
+                    <div className="space-y-1">
+                      <div className="flex items-center text-sm font-medium">
+                        <MapPin className="mr-2 h-3 w-3" />
+                        {course.origine}
+                      </div>
+                      <div className="flex items-center text-sm text-muted-foreground ml-5">
+                        → {course.destination}
+                      </div>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center text-sm">
+                      <User className="mr-2 h-3 w-3" />
+                      {course.client.nom}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    {course.chauffeur ? (
+                      <div className="flex items-center text-sm">
+                        <Car className="mr-2 h-3 w-3" />
+                        {course.chauffeur.nom}
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground">Non assigné</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center text-sm">
+                      <Clock className="mr-2 h-3 w-3" />
+                      {new Date(course.dateHeure).toLocaleString('fr-FR')}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center">
+                      <div className={`w-2 h-2 rounded-full mr-2 ${statutLabels[course.statut].color}`}></div>
+                      <Badge variant="outline">
+                        {statutLabels[course.statut].label}
+                      </Badge>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    {course.prix ? `${course.prix}€` : '-'}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex space-x-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleEdit(course)}
+                      >
+                        <Edit className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleDelete(course.id)}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                      <Select
+                        value={course.statut}
+                        onValueChange={(value) => updateStatut(course.id, value)}
+                      >
+                        <SelectTrigger className="w-32">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="EN_ATTENTE">En attente</SelectItem>
+                          <SelectItem value="ASSIGNEE">Assignée</SelectItem>
+                          <SelectItem value="EN_COURS">En cours</SelectItem>
+                          <SelectItem value="TERMINEE">Terminée</SelectItem>
+                          <SelectItem value="ANNULEE">Annulée</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+          {courses.length === 0 && (
+            <div className="text-center py-6 text-muted-foreground">
+              Aucune course enregistrée. Créez votre première course !
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
