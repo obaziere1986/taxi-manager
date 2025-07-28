@@ -79,12 +79,12 @@ export function CourseCard({ course }: CourseCardProps) {
 
           <div className="flex items-center text-xs text-muted-foreground">
             <User className="h-3 w-3 mr-1" />
-            <span className="truncate">{course.client.prenom} {course.client.nom}</span>
+            <span className="truncate">{course.client.prenom} {course.client.nom.toUpperCase()}</span>
           </div>
 
           {course.chauffeur && (
             <div className="text-xs font-medium text-blue-600">
-              {course.chauffeur.nom}
+              {course.chauffeur.prenom} {course.chauffeur.nom.toUpperCase()}
             </div>
           )}
         </div>

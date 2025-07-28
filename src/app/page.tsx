@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { PageHeader } from '@/components/page-header'
 import { Car, Calendar, Users, MapPin } from "lucide-react"
 import { startOfDay, endOfDay } from 'date-fns'
 
@@ -100,19 +101,18 @@ export default function Home() {
 
   if (loading) {
     return (
-      <div className="flex-1 space-y-4 p-8 pt-6">
-        <div className="flex items-center justify-between space-y-2">
-          <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
+      <div className="flex-1 flex flex-col h-full">
+        <PageHeader title="Dashboard" />
+        <div className="flex-1 p-6">
+          <div>Chargement...</div>
         </div>
-        <div>Chargement...</div>
       </div>
     )
   }
   return (
-    <div className="flex-1 space-y-4 p-8 pt-6">
-      <div className="flex items-center justify-between space-y-2">
-        <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
-      </div>
+    <div className="flex-1 flex flex-col h-full">
+      <PageHeader title="Dashboard" />
+      <div className="flex-1 p-6 space-y-4">
       
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
@@ -193,7 +193,7 @@ export default function Home() {
                     <div className="flex-1 space-y-1">
                       <p className="text-sm font-medium">{course.origine} → {course.destination}</p>
                       <p className="text-xs text-muted-foreground">
-                        {course.client.prenom} {course.client.nom} - {new Date(course.dateHeure).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                        {course.client.prenom} {course.client.nom.toUpperCase()} - {new Date(course.dateHeure).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
                       </p>
                     </div>
                     <div className="text-sm font-medium">{course.prix ? `${course.prix}€` : '-'}</div>
@@ -220,7 +220,7 @@ export default function Home() {
                   <div key={chauffeur.id} className="flex items-center space-x-4">
                     <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                     <div className="flex-1 space-y-1">
-                      <p className="text-sm font-medium">{chauffeur.prenom} {chauffeur.nom}</p>
+                      <p className="text-sm font-medium">{chauffeur.prenom} {chauffeur.nom.toUpperCase()}</p>
                       <p className="text-xs text-muted-foreground">{chauffeur.vehicule} - Disponible</p>
                     </div>
                   </div>
@@ -231,6 +231,7 @@ export default function Home() {
             </div>
           </CardContent>
         </Card>
+      </div>
       </div>
     </div>
   )

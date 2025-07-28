@@ -36,7 +36,7 @@ export function ChauffeurColumn({ chauffeur, courses }: ChauffeurColumnProps) {
     <Card className={`h-full transition-all ${isOver ? 'ring-2 ring-blue-500 bg-blue-50' : ''}`}>
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-sm font-medium">{chauffeur.prenom} {chauffeur.nom}</CardTitle>
+          <CardTitle className="text-sm font-medium">{chauffeur.prenom} {chauffeur.nom.toUpperCase()}</CardTitle>
           <div className="flex items-center">
             <div className={`w-2 h-2 rounded-full mr-2 ${statutColors[chauffeur.statut as keyof typeof statutColors]}`}></div>
             <Badge variant="outline" className="text-xs">

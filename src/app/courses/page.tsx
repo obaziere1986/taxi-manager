@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
+import { PageHeader } from '@/components/page-header'
 import { Plus, MapPin, Clock, User, Car, Edit, Trash2 } from 'lucide-react'
 
 interface Course {
@@ -191,19 +192,18 @@ export default function CoursesPage() {
 
   if (loading) {
     return (
-      <div className="flex-1 space-y-4 p-8 pt-6">
-        <div className="flex items-center justify-between space-y-2">
-          <h2 className="text-3xl font-bold tracking-tight">Courses</h2>
+      <div className="flex-1 flex flex-col h-full">
+        <PageHeader title="Courses" />
+        <div className="flex-1 p-6">
+          <div>Chargement...</div>
         </div>
-        <div>Chargement...</div>
       </div>
     )
   }
 
   return (
-    <div className="flex-1 space-y-4 p-8 pt-6">
-      <div className="flex items-center justify-between space-y-2">
-        <h2 className="text-3xl font-bold tracking-tight">Courses</h2>
+    <div className="flex-1 flex flex-col h-full">
+      <PageHeader title="Courses">
         <Dialog open={isDialogOpen} onOpenChange={(open) => {
           if (!open) resetForm()
           setIsDialogOpen(open)
@@ -273,7 +273,7 @@ export default function CoursesPage() {
                   <SelectContent>
                     {clients.map((client) => (
                       <SelectItem key={client.id} value={client.id}>
-                        {client.nom}
+                        {client.prenom} {client.nom.toUpperCase()}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -292,7 +292,7 @@ export default function CoursesPage() {
                   <SelectContent>
                     {chauffeurs.map((chauffeur) => (
                       <SelectItem key={chauffeur.id} value={chauffeur.id}>
-                        {chauffeur.nom} - {chauffeur.vehicule}
+                        {chauffeur.prenom} {chauffeur.nom.toUpperCase()} - {chauffeur.vehicule}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -352,9 +352,10 @@ export default function CoursesPage() {
             </form>
           </DialogContent>
         </Dialog>
-      </div>
+      </PageHeader>
 
-      <Card>
+      <div className="flex-1 p-6 space-y-4">
+        <Card>
         <CardHeader>
           <CardTitle>Liste des courses</CardTitle>
           <CardDescription>
@@ -391,14 +392,14 @@ export default function CoursesPage() {
                   <TableCell>
                     <div className="flex items-center text-sm">
                       <User className="mr-2 h-3 w-3" />
-                      {course.client.nom}
+                      {course.client.prenom} {course.client.nom.toUpperCase()}
                     </div>
                   </TableCell>
                   <TableCell>
                     {course.chauffeur ? (
                       <div className="flex items-center text-sm">
                         <Car className="mr-2 h-3 w-3" />
-                        {course.chauffeur.nom}
+                        {course.chauffeur.prenom} {course.chauffeur.nom.toUpperCase()}
                       </div>
                     ) : (
                       <span className="text-muted-foreground">Non assigné</span>
@@ -465,6 +466,7 @@ export default function CoursesPage() {
           )}
         </CardContent>
       </Card>
+      </div>
     </div>
   )
 }

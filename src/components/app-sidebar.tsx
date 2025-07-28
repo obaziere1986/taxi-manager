@@ -1,5 +1,6 @@
 "use client"
 
+import { usePathname } from "next/navigation"
 import {
   Calendar,
   Car,
@@ -56,14 +57,13 @@ const items = [
 ]
 
 export function AppSidebar() {
+  const pathname = usePathname()
+
   return (
     <Sidebar>
-      <SidebarHeader className="p-6 border-b">
-        <div className="flex items-center justify-between">
-          <div className="text-xl font-bold text-primary">
-            🚕 Taxi Manager
-          </div>
-          <SidebarTrigger className="ml-auto" />
+      <SidebarHeader className="p-6">
+        <div className="text-xl font-bold text-primary">
+          Taxi Manager
         </div>
       </SidebarHeader>
       <SidebarContent className="mt-4">
@@ -72,7 +72,7 @@ export function AppSidebar() {
             <SidebarMenu>
               {items.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild>
+                  <SidebarMenuButton asChild isActive={pathname === item.url}>
                     <a href={item.url}>
                       <item.icon />
                       <span>{item.title}</span>

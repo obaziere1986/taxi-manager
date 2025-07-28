@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
+import { PageHeader } from '@/components/page-header'
 import { Plus, Phone, Car, Edit, Trash2 } from 'lucide-react'
 
 interface Chauffeur {
@@ -117,19 +118,18 @@ export default function ChauffeursPage() {
 
   if (loading) {
     return (
-      <div className="flex-1 space-y-4 p-8 pt-6">
-        <div className="flex items-center justify-between space-y-2">
-          <h2 className="text-3xl font-bold tracking-tight">Chauffeurs</h2>
+      <div className="flex-1 flex flex-col h-full">
+        <PageHeader title="Chauffeurs" />
+        <div className="flex-1 p-6">
+          <div>Chargement...</div>
         </div>
-        <div>Chargement...</div>
       </div>
     )
   }
 
   return (
-    <div className="flex-1 space-y-4 p-8 pt-6">
-      <div className="flex items-center justify-between space-y-2">
-        <h2 className="text-3xl font-bold tracking-tight">Chauffeurs</h2>
+    <div className="flex-1 flex flex-col h-full">
+      <PageHeader title="Chauffeurs">
         <Dialog open={isDialogOpen} onOpenChange={(open) => {
           if (!open) resetForm()
           setIsDialogOpen(open)
@@ -220,9 +220,10 @@ export default function ChauffeursPage() {
             </form>
           </DialogContent>
         </Dialog>
-      </div>
+      </PageHeader>
 
-      <Card>
+      <div className="flex-1 p-6 space-y-4">
+        <Card>
         <CardHeader>
           <CardTitle>Équipe de chauffeurs</CardTitle>
           <CardDescription>
@@ -244,7 +245,7 @@ export default function ChauffeursPage() {
             <TableBody>
               {chauffeurs.map((chauffeur) => (
                 <TableRow key={chauffeur.id}>
-                  <TableCell className="font-medium">{chauffeur.prenom} {chauffeur.nom}</TableCell>
+                  <TableCell className="font-medium">{chauffeur.prenom} {chauffeur.nom.toUpperCase()}</TableCell>
                   <TableCell>
                     <div className="flex items-center text-sm">
                       <Phone className="mr-2 h-3 w-3" />
@@ -299,6 +300,7 @@ export default function ChauffeursPage() {
           )}
         </CardContent>
       </Card>
+      </div>
     </div>
   )
 }

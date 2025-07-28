@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { DndContext, DragEndEvent, useDroppable, useDraggable } from '@dnd-kit/core'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -118,7 +118,7 @@ const CourseTimelineCard = ({ course }: { course: Course }) => {
 
           <div className="flex items-center text-xs text-muted-foreground">
             <User className="h-3 w-3 mr-1" />
-            <span className="truncate">{course.client.prenom} {course.client.nom}</span>
+            <span className="truncate">{course.client.prenom} {course.client.nom.toUpperCase()}</span>
           </div>
         </div>
       </CardContent>
@@ -167,7 +167,7 @@ const ChauffeurTimeline = ({ chauffeur, courses }: { chauffeur: Chauffeur; cours
         <div className="flex items-center space-x-2">
           <div className={`w-2 h-2 rounded-full ${statusColors[chauffeur.statut as keyof typeof statusColors]}`}></div>
           <div>
-            <div className="font-medium text-sm">{chauffeur.prenom} {chauffeur.nom}</div>
+            <div className="font-medium text-sm">{chauffeur.prenom} {chauffeur.nom.toUpperCase()}</div>
             <div className="text-xs text-muted-foreground">{chauffeur.vehicule}</div>
           </div>
         </div>
@@ -263,15 +263,17 @@ export function TimelinePlanning({ courses, chauffeurs, onCourseAssign }: Timeli
 
     const courseId = active.id as string
     const targetId = over.id as string
+    const newChauffeurId = targetId === 'unassigned' ? null : targetId
     
-    onCourseAssign(courseId, targetId === 'unassigned' ? null : targetId)
+    // Appel API direct
+    onCourseAssign(courseId, newChauffeurId)
   }
 
   return (
     <DndContext onDragEnd={handleDragEnd}>
-      <div className="relative flex bg-white rounded-lg border overflow-hidden">
-        {/* Colonne des heures */}
-        <div className="w-20 bg-gray-50 border-r">
+      <div className="h-full flex bg-white border">
+        {/* Colonne des heures - fixe */}
+        <div className="w-20 bg-gray-50 border-r flex-shrink-0">
           <div className="p-3 border-b font-medium text-sm">
             Heures
           </div>
@@ -289,17 +291,17 @@ export function TimelinePlanning({ courses, chauffeurs, onCourseAssign }: Timeli
           </div>
         </div>
 
-        {/* Scrollable area pour les chauffeurs */}
-        <div className="flex-1 overflow-x-auto">
-          <div className="flex min-w-max relative">
+        {/* Zone scrollable pour les chauffeurs uniquement */}
+        <div className="flex-1 overflow-x-auto overflow-y-auto">
+          <div className="flex min-w-max relative" style={{ minHeight: `${timeSlots.length * 44 + 60}px` }}>
             {/* Colonne courses non assignées */}
-            <div className="w-64">
+            <div className="w-64 flex-shrink-0">
               <UnassignedColumn courses={courses} />
             </div>
 
             {/* Colonnes chauffeurs */}
             {chauffeurs.map((chauffeur) => (
-              <div key={chauffeur.id} className="w-64">
+              <div key={chauffeur.id} className="w-64 flex-shrink-0">
                 <ChauffeurTimeline 
                   chauffeur={chauffeur} 
                   courses={courses}

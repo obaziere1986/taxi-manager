@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { TimelinePlanning } from '@/components/planning/timeline-planning'
+import { GridPlanning } from '@/components/planning/grid-planning'
+import { PageHeader } from '@/components/page-header'
 import { Calendar, ChevronLeft, ChevronRight } from 'lucide-react'
 import { format, addDays, subDays, startOfDay, endOfDay } from 'date-fns'
 import { fr } from 'date-fns/locale'
@@ -87,7 +88,10 @@ export default function PlanningPage() {
       })
 
       if (response.ok) {
-        fetchData() // Recharger les données
+        await fetchData() // Recharger les données
+      } else {
+        const result = await response.json()
+        console.error('Assignment failed:', result)
       }
     } catch (error) {
       console.error('Erreur lors de l\'assignation:', error)
@@ -122,92 +126,90 @@ export default function PlanningPage() {
   }
 
   return (
-    <div className="flex-1 space-y-4 p-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-3xl font-bold tracking-tight">Planning Timeline</h2>
+    <div className="flex-1 flex flex-col h-full">
+      <PageHeader title="Planning Journalier">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => navigateDate('prev')}
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
         
-        <div className="flex items-center space-x-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => navigateDate('prev')}
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          
-          <input
-            type="date"
-            value={format(selectedDate, 'yyyy-MM-dd')}
-            onChange={(e) => setSelectedDate(new Date(e.target.value))}
-            className="flex items-center space-x-2 px-4 py-2 bg-muted rounded-md border-0 font-medium cursor-pointer"
-          />
-          
-          <div className="flex items-center space-x-2 px-2 py-2 bg-muted rounded-md text-sm">
-            <Calendar className="h-4 w-4" />
-            <span className="font-medium">
-              {format(selectedDate, 'EEEE d MMMM', { locale: fr })}
-            </span>
-          </div>
-          
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => navigateDate('next')}
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-          
-          <Button
-            variant="outline"
-            onClick={() => setSelectedDate(new Date())}
-          >
-            Aujourd&apos;hui
-          </Button>
+        <input
+          type="date"
+          value={format(selectedDate, 'yyyy-MM-dd')}
+          onChange={(e) => setSelectedDate(new Date(e.target.value))}
+          className="flex items-center space-x-2 px-4 py-2 bg-muted rounded-md border-0 font-medium cursor-pointer"
+        />
+        
+        <div className="flex items-center space-x-2 px-2 py-2 bg-muted rounded-md text-sm">
+          <Calendar className="h-4 w-4" />
+          <span className="font-medium">
+            {format(selectedDate, 'EEEE d MMMM', { locale: fr })}
+          </span>
         </div>
-      </div>
+        
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => navigateDate('next')}
+        >
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+        
+        <Button
+          variant="outline"
+          onClick={() => setSelectedDate(new Date())}
+        >
+          Aujourd&apos;hui
+        </Button>
+      </PageHeader>
 
-      {/* Vue Timeline */}
-      <div className="flex-1">
-        <TimelinePlanning 
+      {/* Vue Planning Grille - flex-1 pour prendre l'espace restant */}
+      <div className="flex-1 overflow-auto">
+        <GridPlanning 
           courses={courses}
           chauffeurs={chauffeurs}
           onCourseAssign={handleCourseAssign}
         />
       </div>
 
-      {/* Statistiques du jour */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-sm font-medium text-muted-foreground">Total courses</div>
-            <div className="text-2xl font-bold">{courses.length}</div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-sm font-medium text-muted-foreground">En attente</div>
-            <div className="text-2xl font-bold text-gray-600">{getUnassignedCourses().length}</div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-sm font-medium text-muted-foreground">Assignées</div>
-            <div className="text-2xl font-bold text-blue-600">
-              {courses.filter(c => c.statut === 'ASSIGNEE').length}
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-sm font-medium text-muted-foreground">Terminées</div>
-            <div className="text-2xl font-bold text-green-600">
-              {courses.filter(c => c.statut === 'TERMINEE').length}
-            </div>
-          </CardContent>
-        </Card>
+      {/* Statistiques du jour - footer fixe */}
+      <div className="flex-shrink-0 p-6 border-t bg-background">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-sm font-medium text-muted-foreground">Total courses</div>
+              <div className="text-2xl font-bold">{courses.length}</div>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-sm font-medium text-muted-foreground">En attente</div>
+              <div className="text-2xl font-bold text-gray-600">{getUnassignedCourses().length}</div>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-sm font-medium text-muted-foreground">Assignées</div>
+              <div className="text-2xl font-bold text-blue-600">
+                {courses.filter(c => c.statut === 'ASSIGNEE').length}
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-sm font-medium text-muted-foreground">Terminées</div>
+              <div className="text-2xl font-bold text-green-600">
+                {courses.filter(c => c.statut === 'TERMINEE').length}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   )

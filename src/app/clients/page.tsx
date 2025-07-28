@@ -8,7 +8,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
-import { Plus, Phone, Mail, MapPin, Edit, Trash2 } from 'lucide-react'
+import { PageHeader } from '@/components/page-header'
+import { Plus, Phone, Mail, MapPin, Edit, Trash2, Search, ChevronUp, ChevronDown } from 'lucide-react'
 
 interface Client {
   id: string
@@ -28,6 +29,11 @@ export default function ClientsPage() {
   const [loading, setLoading] = useState(true)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingClient, setEditingClient] = useState<Client | null>(null)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [sortConfig, setSortConfig] = useState<{
+    key: keyof Client | 'createdAt' | 'courses' | null
+    direction: 'asc' | 'desc'
+  }>({ key: null, direction: 'asc' })
   const [formData, setFormData] = useState({
     nom: '',
     prenom: '',
@@ -111,21 +117,66 @@ export default function ClientsPage() {
     setIsDialogOpen(false)
   }
 
+  const handleSort = (key: keyof Client | 'createdAt' | 'courses') => {
+    setSortConfig(prevConfig => ({
+      key,
+      direction: prevConfig.key === key && prevConfig.direction === 'asc' ? 'desc' : 'asc'
+    }))
+  }
+
+  const filteredClients = clients.filter(client => {
+    const searchLower = searchTerm.toLowerCase()
+    return (
+      client.nom.toLowerCase().includes(searchLower) ||
+      client.prenom.toLowerCase().includes(searchLower) ||
+      client.telephone.toLowerCase().includes(searchLower) ||
+      (client.email && client.email.toLowerCase().includes(searchLower))
+    )
+  })
+
+  const sortedClients = [...filteredClients].sort((a, b) => {
+    if (!sortConfig.key) return 0
+
+    let aValue: any
+    let bValue: any
+
+    switch (sortConfig.key) {
+      case 'nom':
+        aValue = `${a.prenom} ${a.nom}`.toLowerCase()
+        bValue = `${b.prenom} ${b.nom}`.toLowerCase()
+        break
+      case 'createdAt':
+        aValue = new Date(a.createdAt)
+        bValue = new Date(b.createdAt)
+        break
+      case 'courses':
+        aValue = a._count.courses
+        bValue = b._count.courses
+        break
+      default:
+        aValue = a[sortConfig.key as keyof Client]
+        bValue = b[sortConfig.key as keyof Client]
+    }
+
+    if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1
+    if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1
+    return 0
+  })
+
   if (loading) {
     return (
-      <div className="flex-1 space-y-4 p-8 pt-6">
-        <div className="flex items-center justify-between space-y-2">
-          <h2 className="text-3xl font-bold tracking-tight">Clients</h2>
+      <div className="flex-1 flex flex-col h-full">
+        <PageHeader title="Clients" />
+        <div className="flex-1 p-6">
+          <div>Chargement...</div>
         </div>
-        <div>Chargement...</div>
       </div>
     )
   }
 
   return (
-    <div className="flex-1 space-y-4 p-8 pt-6">
-      <div className="flex items-center justify-between space-y-2">
-        <h2 className="text-3xl font-bold tracking-tight">Clients</h2>
+    <div className="flex-1 flex flex-col h-full">
+      <PageHeader title="Clients">
         <Dialog open={isDialogOpen} onOpenChange={(open) => {
           if (!open) resetForm()
           setIsDialogOpen(open)
@@ -208,30 +259,80 @@ export default function ClientsPage() {
             </form>
           </DialogContent>
         </Dialog>
-      </div>
+      </PageHeader>
 
-      <Card>
+      <div className="flex-1 p-6 space-y-4">
+        <Card>
         <CardHeader>
-          <CardTitle>Liste des clients</CardTitle>
-          <CardDescription>
-            Gérez votre base de clients et consultez leurs informations.
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Liste des clients</CardTitle>
+              <CardDescription>
+                Gérez votre base de clients et consultez leurs informations.
+              </CardDescription>
+            </div>
+            <div className="relative w-80">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+              <Input
+                placeholder="Rechercher par nom, téléphone, email..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Nom</TableHead>
+                <TableHead 
+                  className="cursor-pointer hover:bg-muted/50 select-none"
+                  onClick={() => handleSort('nom')}
+                >
+                  <div className="flex items-center space-x-1">
+                    <span>Nom</span>
+                    {sortConfig.key === 'nom' && (
+                      sortConfig.direction === 'asc' ? 
+                        <ChevronUp className="h-4 w-4" /> : 
+                        <ChevronDown className="h-4 w-4" />
+                    )}
+                  </div>
+                </TableHead>
                 <TableHead>Contact</TableHead>
-                <TableHead>Courses</TableHead>
-                <TableHead>Membre depuis</TableHead>
+                <TableHead 
+                  className="cursor-pointer hover:bg-muted/50 select-none"
+                  onClick={() => handleSort('courses')}
+                >
+                  <div className="flex items-center space-x-1">
+                    <span>Courses</span>
+                    {sortConfig.key === 'courses' && (
+                      sortConfig.direction === 'asc' ? 
+                        <ChevronUp className="h-4 w-4" /> : 
+                        <ChevronDown className="h-4 w-4" />
+                    )}
+                  </div>
+                </TableHead>
+                <TableHead 
+                  className="cursor-pointer hover:bg-muted/50 select-none"
+                  onClick={() => handleSort('createdAt')}
+                >
+                  <div className="flex items-center space-x-1">
+                    <span>Membre depuis</span>
+                    {sortConfig.key === 'createdAt' && (
+                      sortConfig.direction === 'asc' ? 
+                        <ChevronUp className="h-4 w-4" /> : 
+                        <ChevronDown className="h-4 w-4" />
+                    )}
+                  </div>
+                </TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {clients.map((client) => (
+              {sortedClients.map((client) => (
                 <TableRow key={client.id}>
-                  <TableCell className="font-medium">{client.prenom} {client.nom}</TableCell>
+                  <TableCell className="font-medium">{client.prenom} {client.nom.toUpperCase()}</TableCell>
                   <TableCell>
                     <div className="space-y-1">
                       <div className="flex items-center text-sm">
@@ -282,13 +383,18 @@ export default function ClientsPage() {
               ))}
             </TableBody>
           </Table>
-          {clients.length === 0 && (
+          {clients.length === 0 ? (
             <div className="text-center py-6 text-muted-foreground">
               Aucun client enregistré. Ajoutez votre premier client !
             </div>
-          )}
+          ) : sortedClients.length === 0 ? (
+            <div className="text-center py-6 text-muted-foreground">
+              Aucun client trouvé pour "{searchTerm}".
+            </div>
+          ) : null}
         </CardContent>
       </Card>
+      </div>
     </div>
   )
 }
