@@ -5,8 +5,12 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Textarea } from '@/components/ui/textarea'
 import { PageHeader } from '@/components/page-header'
-import { Calendar, ChevronLeft, ChevronRight, Clock, User, MapPin, Plus, Zap, CheckCircle } from 'lucide-react'
+import { Calendar, ChevronLeft, ChevronRight, Clock, User, MapPin, Plus, Zap, CheckCircle, UserPlus } from 'lucide-react'
 import { format, addDays, subDays, startOfDay, endOfDay, addHours, startOfHour } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import {
@@ -19,6 +23,7 @@ import {
   useSensors,
   DragStartEvent,
   DragEndEvent,
+  DragOverEvent,
 } from '@dnd-kit/core'
 import {
   sortableKeyboardCoordinates,
@@ -54,6 +59,14 @@ interface Chauffeur {
   statut: string
 }
 
+interface Client {
+  id: string
+  nom: string
+  prenom: string
+  telephone: string
+  email?: string
+}
+
 export default function PlanningPage() {
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [courses, setCourses] = useState<Course[]>([])
@@ -66,6 +79,29 @@ export default function PlanningPage() {
     hour?: number
   }>({ isOpen: false })
   const [activeId, setActiveId] = useState<string | null>(null)
+  const [activeCourse, setActiveCourse] = useState<Course | null>(null)
+  const [dragOverSlot, setDragOverSlot] = useState<string | null>(null)
+  const [courseDetailsDialog, setCourseDetailsDialog] = useState<{
+    isOpen: boolean
+    course?: Course
+  }>({ isOpen: false })
+  const [createCourseDialog, setCreateCourseDialog] = useState(false)
+  const [clients, setClients] = useState<Client[]>([])
+  const [showNewClientForm, setShowNewClientForm] = useState(false)
+  const [courseFormData, setCourseFormData] = useState({
+    origine: '',
+    destination: '',
+    dateHeure: '',
+    clientId: '',
+    prix: '',
+    notes: ''
+  })
+  const [newClientData, setNewClientData] = useState({
+    nom: '',
+    prenom: '',
+    telephone: '',
+    email: ''
+  })
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -76,7 +112,18 @@ export default function PlanningPage() {
 
   useEffect(() => {
     fetchData()
+    fetchClients()
   }, [selectedDate])
+
+  const fetchClients = async () => {
+    try {
+      const response = await fetch('/api/clients')
+      const data = await response.json()
+      setClients(data)
+    } catch (error) {
+      console.error('Erreur lors du chargement des clients:', error)
+    }
+  }
 
   const fetchData = async () => {
     try {
@@ -156,6 +203,17 @@ export default function PlanningPage() {
     return slots
   }
 
+  // Fonction pour vérifier si c'est le jour actuel
+  const isToday = () => {
+    const today = new Date()
+    return selectedDate.toDateString() === today.toDateString()
+  }
+
+  // Fonction pour obtenir l'heure actuelle
+  const getCurrentHour = () => {
+    return new Date().getHours()
+  }
+
   const formatHour = (hour: number) => {
     return `${hour}:00`
   }
@@ -206,11 +264,54 @@ export default function PlanningPage() {
     return statutMap[statut] || statut
   }
 
-  const openAssignDialog = (course: Course, chauffeur: Chauffeur, hour: number) => {
+  const getCompatibleCourses = (targetHour: number, toleranceMinutes: number = 30) => {
+    return getUnassignedCourses().filter(course => {
+      const courseDate = new Date(course.dateHeure)
+      const courseHour = courseDate.getHours()
+      const courseMinutes = courseDate.getMinutes()
+      
+      // Convertir l'heure de la course en minutes
+      const courseTotalMinutes = courseHour * 60 + courseMinutes
+      // Convertir l'heure cible en minutes
+      const targetTotalMinutes = targetHour * 60
+      
+      // Vérifier que c'est le bon jour
+      const courseDay = courseDate.toDateString()
+      const selectedDay = selectedDate.toDateString()
+      
+      if (courseDay !== selectedDay) return false
+      
+      // Vérifier si la course est dans la fenêtre de tolérance
+      const timeDifference = Math.abs(courseTotalMinutes - targetTotalMinutes)
+      return timeDifference <= toleranceMinutes
+    })
+  }
+
+  const openAssignDialog = (course: Course | null, chauffeur: Chauffeur, hour: number) => {
     // Vérifier si le créneau est libre
     if (!isChauffeurAvailable(chauffeur.id, hour)) {
       alert('Ce créneau est déjà occupé')
       return
+    }
+
+    // Si pas de course spécifiée, trouver les courses compatibles
+    if (!course) {
+      const compatibleCourses = getCompatibleCourses(hour)
+      
+      if (compatibleCourses.length === 0) {
+        alert(`Aucune course compatible trouvée pour le créneau ${formatHour(hour)}`)
+        return
+      }
+      
+      if (compatibleCourses.length === 1) {
+        // Une seule course compatible, l'assigner directement
+        course = compatibleCourses[0]
+      } else {
+        // Plusieurs courses compatibles - pour l'instant on prend la première
+        // TODO: Implémenter le sélecteur de course
+        course = compatibleCourses[0]
+        console.log(`${compatibleCourses.length} courses compatibles trouvées pour ${formatHour(hour)}, assignation de la première`)
+      }
     }
 
     setConfirmDialog({
@@ -222,27 +323,18 @@ export default function PlanningPage() {
   }
 
   const confirmAssignment = async () => {
-    const { course, chauffeur, hour } = confirmDialog
-    if (!course || !chauffeur || hour === undefined) return
-
-    // Créer la nouvelle date/heure précise
-    const selectedDateAtHour = addHours(startOfDay(selectedDate), hour)
+    const { course, chauffeur } = confirmDialog
+    if (!course || !chauffeur) return
     
     try {
-      // Mettre à jour la course avec la nouvelle heure ET le chauffeur
+      // Assigner uniquement le chauffeur, SANS modifier l'heure de la course
       const updateResponse = await fetch(`/api/courses/${course.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          origine: course.origine,
-          destination: course.destination,
-          dateHeure: selectedDateAtHour.toISOString(),
-          clientId: course.client?.id || course.clientId,
           chauffeurId: chauffeur.id,
-          prix: course.prix,
-          notes: course.notes,
           statut: 'ASSIGNEE'
         }),
       })
@@ -268,12 +360,22 @@ export default function PlanningPage() {
   }
 
   const handleDragStart = (event: DragStartEvent) => {
-    setActiveId(event.active.id as string)
+    const courseId = event.active.id as string
+    setActiveId(courseId)
+    const course = courses.find(c => c.id === courseId)
+    setActiveCourse(course || null)
+  }
+
+  const handleDragOver = (event: DragOverEvent) => {
+    const { over } = event
+    setDragOverSlot(over ? over.id as string : null)
   }
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event
     setActiveId(null)
+    setActiveCourse(null)
+    setDragOverSlot(null)
 
     if (!over) return
 
@@ -290,6 +392,78 @@ export default function PlanningPage() {
 
     // Ouvrir la modale de confirmation
     openAssignDialog(course, chauffeur, hour)
+  }
+
+  const resetCourseForm = () => {
+    setCourseFormData({
+      origine: '',
+      destination: '',
+      dateHeure: format(selectedDate, 'yyyy-MM-dd\'T\'HH:mm'),
+      clientId: '',
+      prix: '',
+      notes: ''
+    })
+    setNewClientData({
+      nom: '',
+      prenom: '',
+      telephone: '',
+      email: ''
+    })
+    setShowNewClientForm(false)
+  }
+
+  const handleCreateCourse = async (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    try {
+      let clientId = courseFormData.clientId
+
+      // Si on crée un nouveau client
+      if (showNewClientForm) {
+        const clientResponse = await fetch('/api/clients', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(newClientData),
+        })
+
+        if (!clientResponse.ok) {
+          throw new Error('Erreur lors de la création du client')
+        }
+
+        const newClient = await clientResponse.json()
+        clientId = newClient.id
+        
+        // Recharger la liste des clients
+        await fetchClients()
+      }
+
+      // Créer la course
+      const courseResponse = await fetch('/api/courses', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ...courseFormData,
+          clientId,
+          prix: courseFormData.prix ? parseFloat(courseFormData.prix) : null,
+        }),
+      })
+
+      if (!courseResponse.ok) {
+        throw new Error('Erreur lors de la création de la course')
+      }
+
+      // Recharger les données et fermer la modale
+      await fetchData()
+      setCreateCourseDialog(false)
+      resetCourseForm()
+    } catch (error) {
+      console.error('Erreur lors de la création:', error)
+      alert('Erreur lors de la création de la course')
+    }
   }
 
   if (loading) {
@@ -325,7 +499,7 @@ export default function PlanningPage() {
         <div className="space-y-2">
           <div className="flex items-center text-xs font-medium">
             <Clock className="h-3 w-3 mr-1" />
-            {format(new Date(course.dateHeure), 'HH:mm')}
+            {format(new Date(course.dateHeure), 'HH:mm', { locale: fr })}
           </div>
           <div className="text-sm font-medium">
             {course.origine} → {course.destination}
@@ -352,11 +526,17 @@ export default function PlanningPage() {
       id: `${chauffeurId}-${hour}`,
     })
 
+    const slotId = `${chauffeurId}-${hour}`
+    const isHighlighted = dragOverSlot === slotId && activeCourse && isChauffeurAvailable(chauffeurId, hour)
+    const isCompatible = activeCourse && isSlotCompatible(activeCourse, hour)
+
     return (
       <td 
         ref={setNodeRef}
         className={`p-1 border-r text-center transition-colors ${
-          isOver ? 'bg-blue-100 border-blue-300' : ''
+          isOver && isCompatible ? 'bg-green-100 border-green-300 ring-2 ring-green-300' : 
+          isHighlighted && isCompatible ? 'bg-green-50 border-green-200' :
+          isOver ? 'bg-red-100 border-red-300' : ''
         }`}
       >
         {children}
@@ -364,11 +544,22 @@ export default function PlanningPage() {
     )
   }
 
+  // Fonction pour vérifier si un slot est compatible avec une course
+  const isSlotCompatible = (course: Course, hour: number) => {
+    const courseDate = new Date(course.dateHeure)
+    const courseHour = courseDate.getHours()
+    
+    // Tolérance de 30 minutes
+    const timeDifference = Math.abs(courseHour - hour)
+    return timeDifference <= 0.5
+  }
+
   return (
     <DndContext
       sensors={sensors}
       collisionDetection={closestCenter}
       onDragStart={handleDragStart}
+      onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
     >
     <div className="flex-1 flex flex-col h-full">
@@ -449,65 +640,105 @@ export default function PlanningPage() {
       </div>
 
       {/* Planning avec Timeline */}
-      <div className="flex-1 p-6 overflow-hidden">
-        <div className="grid grid-cols-12 gap-6 h-[calc(100vh-320px)]">
+      <div className="flex-1 p-6 flex flex-col overflow-hidden">
+        <div className="grid grid-cols-12 gap-6 flex-1 min-h-0">
           
           {/* Panel gauche - Courses non assignées */}
-          <div className="col-span-3">
-            <Card className="h-full">
+          <div className="col-span-3 flex flex-col min-h-0">
+            <Card className="flex-1 flex flex-col min-h-0">
               <CardHeader>
                 <CardTitle className="text-sm flex items-center">
                   <Clock className="h-4 w-4 mr-2" />
                   Courses en attente ({getUnassignedCourses().length})
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3 h-[calc(100%-80px)] overflow-y-auto">
-                {getUnassignedCourses().map((course) => (
-                  <DraggableCourse key={course.id} course={course} />
-                ))}
-                {getUnassignedCourses().length === 0 && (
-                  <div className="text-center text-muted-foreground text-sm py-8">
-                    Toutes les courses sont assignées
-                  </div>
-                )}
+              <CardContent className="flex-1 flex flex-col min-h-0 p-0">
+                <div className="space-y-3 p-6 flex-1 overflow-y-auto">
+                {getUnassignedCourses()
+                  .sort((a, b) => new Date(a.dateHeure).getTime() - new Date(b.dateHeure).getTime())
+                  .map((course) => (
+                    <DraggableCourse key={course.id} course={course} />
+                  ))}
+                  {getUnassignedCourses().length === 0 && (
+                    <div className="text-center text-muted-foreground text-sm py-8">
+                      Toutes les courses sont assignées
+                    </div>
+                  )}
+                </div>
               </CardContent>
             </Card>
           </div>
 
           {/* Timeline centrale */}
-          <div className="col-span-9">
-            <Card className="h-full">
+          <div className="col-span-9 flex flex-col min-h-0">
+            <Card className="flex-1 flex flex-col min-h-0">
               <CardHeader>
                 <CardTitle className="text-sm flex items-center justify-between">
                   <div className="flex items-center">
                     <Calendar className="h-4 w-4 mr-2" />
                     Planning détaillé
                   </div>
-                  <Button size="sm" variant="outline">
-                    <Zap className="h-4 w-4 mr-2" />
-                    Assignation auto
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button 
+                      size="sm" 
+                      onClick={() => {
+                        resetCourseForm()
+                        setCreateCourseDialog(true)
+                      }}
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Nouvelle course
+                    </Button>
+                    <Button size="sm" variant="outline">
+                      <Zap className="h-4 w-4 mr-2" />
+                      Assignation auto
+                    </Button>
+                  </div>
                 </CardTitle>
               </CardHeader>
-              <CardContent className="p-0">
-                <div className="overflow-auto h-[calc(100%-80px)]">
+              <CardContent className="flex-1 flex flex-col min-h-0 p-0">
+                <div className="flex-1 overflow-auto">
                   <table className="w-full">
                     <thead className="sticky top-0 bg-background border-b">
                       <tr>
-                        <th className="sticky left-0 z-20 w-32 p-3 text-left text-xs font-medium text-muted-foreground border-r bg-background">
+                        <th 
+                          className="sticky left-0 z-20 w-32 p-3 text-left text-xs font-medium text-muted-foreground border-r bg-background"
+                          style={{ boxShadow: '2px 0 4px -1px rgba(0, 0, 0, 0.1)' }}
+                        >
                           Chauffeur
                         </th>
                         {generateTimeSlots().map((hour) => (
-                          <th key={hour} className="w-24 p-2 text-center text-xs font-medium text-muted-foreground border-r">
+                          <th key={hour} className={`w-24 p-2 text-center text-xs font-medium border-r ${
+                            isToday() && hour === getCurrentHour() 
+                              ? 'bg-red-100 text-red-600 font-bold' 
+                              : 'text-muted-foreground'
+                          }`}>
                             {formatHour(hour)}
+                            {isToday() && hour === getCurrentHour() && (
+                              <div className="text-xs mt-1 text-red-500">MAINTENANT</div>
+                            )}
                           </th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
-                      {chauffeurs.map((chauffeur) => (
+                      {chauffeurs
+                        .sort((a, b) => {
+                          // Tri par statut : DISPONIBLE en premier, puis OCCUPE, puis HORS_SERVICE
+                          const statutOrder = { 'DISPONIBLE': 0, 'OCCUPE': 1, 'HORS_SERVICE': 2 }
+                          const aOrder = statutOrder[a.statut as keyof typeof statutOrder] ?? 3
+                          const bOrder = statutOrder[b.statut as keyof typeof statutOrder] ?? 3
+                          if (aOrder !== bOrder) return aOrder - bOrder
+                          
+                          // Si même statut, tri alphabétique par nom
+                          return a.nom.localeCompare(b.nom)
+                        })
+                        .map((chauffeur) => (
                         <tr key={chauffeur.id} className="border-b hover:bg-muted/30">
-                          <td className="sticky left-0 z-10 p-3 border-r bg-background">
+                          <td 
+                            className="sticky left-0 z-10 p-3 border-r bg-background"
+                            style={{ boxShadow: '2px 0 4px -1px rgba(0, 0, 0, 0.1)' }}
+                          >
                             <div className="space-y-1">
                               <div className="text-sm font-medium">
                                 {chauffeur.prenom} {chauffeur.nom.toUpperCase()}
@@ -528,39 +759,55 @@ export default function PlanningPage() {
                           {generateTimeSlots().map((hour) => {
                             const course = getCourseForChauffeurAtHour(chauffeur.id, hour)
                             const isAvailable = isChauffeurAvailable(chauffeur.id, hour)
+                            const compatibleCourses = getCompatibleCourses(hour)
+                            
+                            const isCurrentHour = isToday() && hour === getCurrentHour()
                             
                             return (
                               <DroppableSlot key={hour} chauffeurId={chauffeur.id} hour={hour}>
+                                <div className={isCurrentHour ? 'bg-red-50 rounded' : ''}>
                                 {course ? (
-                                  <div className="bg-blue-100 border border-blue-300 rounded p-2 text-xs">
-                                    <div className="font-medium text-blue-900 truncate">
+                                  <div 
+                                    className="bg-blue-100 border border-blue-300 rounded p-2 text-xs cursor-pointer hover:bg-blue-200 transition-colors"
+                                    onClick={() => setCourseDetailsDialog({ isOpen: true, course })}
+                                  >
+                                    <div className="flex items-center justify-between mb-1">
+                                      <div className="font-medium text-blue-900 text-xs">
+                                        {format(new Date(course.dateHeure), 'HH:mm', { locale: fr })}
+                                      </div>
+                                      <Badge variant="secondary" className="text-xs">
+                                        {formatStatut(course.statut)}
+                                      </Badge>
+                                    </div>
+                                    <div className="font-medium text-blue-900 truncate text-xs">
                                       {course.origine} → {course.destination}
                                     </div>
-                                    <div className="text-blue-700 truncate">
+                                    <div className="text-blue-700 truncate text-xs">
                                       {course.client.prenom} {course.client.nom.toUpperCase()}
                                     </div>
                                   </div>
                                 ) : isAvailable && chauffeur.statut === 'DISPONIBLE' ? (
-                                  <div 
-                                    className="h-12 bg-green-50 border border-green-200 rounded hover:bg-green-100 cursor-pointer flex items-center justify-center transition-colors"
-                                    onClick={() => {
-                                      const unassignedCourses = getUnassignedCourses()
-                                      if (unassignedCourses.length > 0) {
-                                        // Si une seule course, l'assigner directement avec confirmation
-                                        if (unassignedCourses.length === 1) {
-                                          openAssignDialog(unassignedCourses[0], chauffeur, hour)
-                                        } else {
-                                          // TODO: Ouvrir un sélecteur de course si plusieurs courses
-                                          openAssignDialog(unassignedCourses[0], chauffeur, hour)
-                                        }
-                                      }
-                                    }}
-                                  >
-                                    <Plus className="h-4 w-4 text-green-600" />
-                                  </div>
+                                  compatibleCourses.length > 0 ? (
+                                    <div 
+                                      className="h-12 bg-green-50 border border-green-300 rounded hover:bg-green-100 cursor-pointer flex flex-col items-center justify-center transition-colors"
+                                      onClick={() => {
+                                        openAssignDialog(null, chauffeur, hour)
+                                      }}
+                                    >
+                                      <Plus className="h-3 w-3 text-green-600" />
+                                      <span className="text-xs text-green-700 font-medium">
+                                        {compatibleCourses.length}
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <div className="h-12 bg-gray-50 rounded border border-gray-200 flex items-center justify-center">
+                                      <span className="text-xs text-gray-400">-</span>
+                                    </div>
+                                  )
                                 ) : (
-                                  <div className="h-12 bg-gray-50 rounded border border-gray-200"></div>
+                                  <div className="h-12 bg-gray-100 rounded border border-gray-300"></div>
                                 )}
+                                </div>
                               </DroppableSlot>
                             )
                           })}
@@ -593,7 +840,7 @@ export default function PlanningPage() {
                   <div className="space-y-2 text-sm">
                     <div className="flex items-center">
                       <Clock className="h-4 w-4 mr-2 text-muted-foreground" />
-                      {formatHour(confirmDialog.hour)} le {format(selectedDate, 'dd/MM/yyyy', { locale: fr })}
+                      {format(new Date(confirmDialog.course.dateHeure), 'HH:mm', { locale: fr })} le {format(new Date(confirmDialog.course.dateHeure), 'dd/MM/yyyy', { locale: fr })}
                     </div>
                     <div className="flex items-center">
                       <MapPin className="h-4 w-4 mr-2 text-muted-foreground" />
@@ -623,6 +870,280 @@ export default function PlanningPage() {
                   </Button>
                   <Button onClick={confirmAssignment}>
                     Confirmer l'assignation
+                  </Button>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Modale de création de course */}
+        <Dialog open={createCourseDialog} onOpenChange={(open) => {
+          setCreateCourseDialog(open)
+          if (!open) resetCourseForm()
+        }}>
+          <DialogContent className="sm:max-w-[600px]">
+            <DialogHeader>
+              <DialogTitle>Nouvelle course</DialogTitle>
+              <DialogDescription>
+                Créer une nouvelle course pour le {format(selectedDate, 'dd/MM/yyyy', { locale: fr })}
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleCreateCourse} className="space-y-4">
+              {/* Date et heure */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="dateHeure">Date et heure *</Label>
+                  <Input
+                    id="dateHeure"
+                    type="datetime-local"
+                    value={courseFormData.dateHeure}
+                    onChange={(e) => setCourseFormData({ ...courseFormData, dateHeure: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="prix">Prix estimé (€)</Label>
+                  <Input
+                    id="prix"
+                    type="number"
+                    step="0.01"
+                    value={courseFormData.prix}
+                    onChange={(e) => setCourseFormData({ ...courseFormData, prix: e.target.value })}
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+
+              {/* Origine et destination */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="origine">Origine *</Label>
+                  <Input
+                    id="origine"
+                    value={courseFormData.origine}
+                    onChange={(e) => setCourseFormData({ ...courseFormData, origine: e.target.value })}
+                    placeholder="Adresse de départ"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="destination">Destination *</Label>
+                  <Input
+                    id="destination"
+                    value={courseFormData.destination}
+                    onChange={(e) => setCourseFormData({ ...courseFormData, destination: e.target.value })}
+                    placeholder="Adresse d'arrivée"
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Client */}
+              <div className="space-y-2">
+                <Label>Client *</Label>
+                {!showNewClientForm ? (
+                  <div className="flex gap-2">
+                    <Select
+                      value={courseFormData.clientId}
+                      onValueChange={(value) => setCourseFormData({ ...courseFormData, clientId: value })}
+                    >
+                      <SelectTrigger className="flex-1">
+                        <SelectValue placeholder="Sélectionner un client" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {clients.map((client) => (
+                          <SelectItem key={client.id} value={client.id}>
+                            {client.prenom} {client.nom.toUpperCase()} - {client.telephone}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setShowNewClientForm(true)}
+                    >
+                      <UserPlus className="h-4 w-4 mr-2" />
+                      Nouveau
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="border rounded-lg p-4 space-y-3 bg-muted/50">
+                    <div className="flex justify-between items-center">
+                      <h4 className="text-sm font-medium">Nouveau client</h4>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowNewClientForm(false)}
+                      >
+                        Annuler
+                      </Button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label htmlFor="clientNom">Nom *</Label>
+                        <Input
+                          id="clientNom"
+                          value={newClientData.nom}
+                          onChange={(e) => setNewClientData({ ...newClientData, nom: e.target.value })}
+                          required
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="clientPrenom">Prénom *</Label>
+                        <Input
+                          id="clientPrenom"
+                          value={newClientData.prenom}
+                          onChange={(e) => setNewClientData({ ...newClientData, prenom: e.target.value })}
+                          required
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="clientTelephone">Téléphone *</Label>
+                        <Input
+                          id="clientTelephone"
+                          type="tel"
+                          value={newClientData.telephone}
+                          onChange={(e) => setNewClientData({ ...newClientData, telephone: e.target.value })}
+                          required
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="clientEmail">Email</Label>
+                        <Input
+                          id="clientEmail"
+                          type="email"
+                          value={newClientData.email}
+                          onChange={(e) => setNewClientData({ ...newClientData, email: e.target.value })}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Notes */}
+              <div className="space-y-2">
+                <Label htmlFor="notes">Notes</Label>
+                <Textarea
+                  id="notes"
+                  value={courseFormData.notes}
+                  onChange={(e) => setCourseFormData({ ...courseFormData, notes: e.target.value })}
+                  placeholder="Informations complémentaires..."
+                  rows={3}
+                />
+              </div>
+
+              <div className="flex justify-end space-x-2 pt-4">
+                <Button type="button" variant="outline" onClick={() => setCreateCourseDialog(false)}>
+                  Annuler
+                </Button>
+                <Button type="submit">
+                  Créer la course
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
+
+        {/* Modale des détails de course */}
+        <Dialog open={courseDetailsDialog.isOpen} onOpenChange={(open) => setCourseDetailsDialog({ isOpen: open })}>
+          <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+              <DialogTitle className="flex items-center">
+                <Clock className="h-5 w-5 mr-2 text-blue-600" />
+                Détails de la course
+              </DialogTitle>
+              <DialogDescription>
+                Informations complètes sur la course sélectionnée.
+              </DialogDescription>
+            </DialogHeader>
+            {courseDetailsDialog.course && (
+              <div className="space-y-4">
+                {/* Informations principales */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <div className="text-sm font-medium text-muted-foreground">Date et heure</div>
+                    <div className="text-sm">
+                      {format(new Date(courseDetailsDialog.course.dateHeure), 'EEEE d MMMM yyyy', { locale: fr })}
+                    </div>
+                    <div className="text-lg font-bold text-blue-600">
+                      {format(new Date(courseDetailsDialog.course.dateHeure), 'HH:mm', { locale: fr })}
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-sm font-medium text-muted-foreground">Statut</div>
+                    <Badge variant={
+                      courseDetailsDialog.course.statut === 'EN_ATTENTE' ? 'secondary' :
+                      courseDetailsDialog.course.statut === 'ASSIGNEE' ? 'default' :
+                      courseDetailsDialog.course.statut === 'EN_COURS' ? 'secondary' :
+                      courseDetailsDialog.course.statut === 'TERMINEE' ? 'default' : 'destructive'
+                    }>
+                      {formatStatut(courseDetailsDialog.course.statut)}
+                    </Badge>
+                  </div>
+                </div>
+
+                {/* Trajet */}
+                <div className="border rounded-lg p-4 bg-muted/50">
+                  <h4 className="font-medium text-sm mb-3 flex items-center">
+                    <MapPin className="h-4 w-4 mr-2" />
+                    Trajet
+                  </h4>
+                  <div className="space-y-2">
+                    <div className="flex items-start">
+                      <div className="w-3 h-3 rounded-full bg-green-500 mt-1 mr-3 flex-shrink-0"></div>
+                      <div>
+                        <div className="text-sm font-medium">Origine</div>
+                        <div className="text-sm text-muted-foreground">
+                          {courseDetailsDialog.course.origine}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-start">
+                      <div className="w-3 h-3 rounded-full bg-red-500 mt-1 mr-3 flex-shrink-0"></div>
+                      <div>
+                        <div className="text-sm font-medium">Destination</div>
+                        <div className="text-sm text-muted-foreground">
+                          {courseDetailsDialog.course.destination}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Client */}
+                <div className="border rounded-lg p-4 bg-blue-50">
+                  <h4 className="font-medium text-sm mb-2 flex items-center">
+                    <User className="h-4 w-4 mr-2" />
+                    Client
+                  </h4>
+                  <div className="text-sm">
+                    {courseDetailsDialog.course.client.prenom} {courseDetailsDialog.course.client.nom.toUpperCase()}
+                  </div>
+                </div>
+
+                {/* Chauffeur assigné */}
+                {courseDetailsDialog.course.chauffeur && (
+                  <div className="border rounded-lg p-4 bg-green-50">
+                    <h4 className="font-medium text-sm mb-2 flex items-center">
+                      <User className="h-4 w-4 mr-2" />
+                      Chauffeur assigné
+                    </h4>
+                    <div className="text-sm">
+                      {courseDetailsDialog.course.chauffeur.prenom} {courseDetailsDialog.course.chauffeur.nom.toUpperCase()}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex justify-end pt-4">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setCourseDetailsDialog({ isOpen: false })}
+                  >
+                    Fermer
                   </Button>
                 </div>
               </div>

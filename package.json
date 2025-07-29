@@ -6,7 +6,12 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "restart": "kill $(lsof -ti:3000) 2>/dev/null || true && pnpm dev",
+    "postinstall": "prisma generate",
+    "db:push": "prisma db push",
+    "db:seed": "ts-node scripts/seed.ts",
+    "db:reset": "rm -f prisma/dev.db && prisma db push && npm run db:seed"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

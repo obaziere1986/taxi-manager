@@ -30,6 +30,11 @@ const items = [
     icon: Home,
   },
   {
+    title: "Planning",
+    url: "/planning",
+    icon: Calendar,
+  },
+  {
     title: "Clients",
     url: "/clients",
     icon: Users,
@@ -38,11 +43,6 @@ const items = [
     title: "Courses",
     url: "/courses",
     icon: MapPin,
-  },
-  {
-    title: "Planning",
-    url: "/planning",
-    icon: Calendar,
   },
   {
     title: "Chauffeurs",

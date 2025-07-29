@@ -5,23 +5,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Development Commands
 
 ### Core Development
-- `npm run dev` - Start development server with Turbopack on http://localhost:3000
-- `npm run build` - Build production application
-- `npm run start` - Start production server
-- `npm run lint` - Run ESLint on codebase
+- `pnpm dev` - Start development server with Turbopack on http://localhost:3000
+- `pnpm build` - Build production application
+- `pnpm start` - Start production server
+- `pnpm lint` - Run ESLint on codebase
 
 ### Database Management
-- `npx prisma db push` - Apply schema changes to SQLite database
-- `npx prisma generate` - Generate Prisma client after schema changes
-- `npx prisma studio` - Open Prisma Studio on http://localhost:5555
-- `npx ts-node scripts/seed.ts` - Populate database with test data (10 chauffeurs, 50 clients, ~55 courses)
+- `pnpm exec prisma db push` - Apply schema changes to SQLite database
+- `pnpm exec prisma generate` - Generate Prisma client after schema changes
+- `pnpm exec prisma studio` - Open Prisma Studio on http://localhost:5555
+- `pnpm exec ts-node scripts/seed.ts` - Populate database with test data (10 chauffeurs, 50 clients, ~55 courses)
 
 ### Database Reset
 When changing models or need fresh data:
 ```bash
 rm prisma/dev.db
-npx prisma db push
-npx ts-node scripts/seed.ts
+pnpm exec prisma db push
+pnpm exec ts-node scripts/seed.ts
 ```
 
 ## Architecture Overview
