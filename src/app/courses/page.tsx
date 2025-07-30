@@ -22,10 +22,12 @@ interface Course {
   notes: string | null
   client: {
     nom: string
+    prenom: string
     telephone: string
   }
   chauffeur: {
     nom: string
+    prenom: string
     vehicule: string
   } | null
 }
@@ -33,11 +35,14 @@ interface Course {
 interface Client {
   id: string
   nom: string
+  prenom: string
+  telephone: string
 }
 
 interface Chauffeur {
   id: string
   nom: string
+  prenom: string
   vehicule: string
 }
 

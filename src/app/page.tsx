@@ -6,6 +6,10 @@ import { Badge } from "@/components/ui/badge"
 import { PageHeader } from '@/components/page-header'
 import { Car, Calendar, Users, MapPin } from "lucide-react"
 import { startOfDay, endOfDay } from 'date-fns'
+import { CoursesTimeline } from '@/components/dashboard/charts/CoursesTimeline'
+import { ChauffeurPerformance } from '@/components/dashboard/charts/ChauffeurPerformance'
+import { RevenueChart } from '@/components/dashboard/charts/RevenueChart'
+import { TopChauffeurs } from '@/components/dashboard/metrics/TopChauffeurs'
 
 interface DashboardStats {
   coursesToday: number
@@ -112,126 +116,126 @@ export default function Home() {
   return (
     <div className="flex-1 flex flex-col h-full">
       <PageHeader title="Dashboard" />
-      <div className="flex-1 p-6 space-y-4">
-      
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Courses du jour
-            </CardTitle>
-            <MapPin className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.coursesToday}</div>
-            <p className="text-xs text-muted-foreground">
-              {getGrowthPercentage()} par rapport à hier
-            </p>
-          </CardContent>
-        </Card>
+      <div className="flex-1 p-6 space-y-6">
         
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Chauffeurs actifs
-            </CardTitle>
-            <Car className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.chauffeursActifs}</div>
-            <p className="text-xs text-muted-foreground">
-              Sur {stats.totalChauffeurs} chauffeurs
-            </p>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Clients
-            </CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalClients}</div>
-            <p className="text-xs text-muted-foreground">
-              Clients enregistrés
-            </p>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              En attente
-            </CardTitle>
-            <Calendar className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.coursesEnAttente}</div>
-            <p className="text-xs text-muted-foreground">
-              Courses à assigner
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-      
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Courses récentes</CardTitle>
-            <CardDescription>
-              Les dernières courses enregistrées
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {stats.recentCourses.length > 0 ? (
-                stats.recentCourses.map((course: any) => (
-                  <div key={course.id} className="flex items-center space-x-4">
-                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                    <div className="flex-1 space-y-1">
-                      <p className="text-sm font-medium">{course.origine} → {course.destination}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {course.client.prenom} {course.client.nom.toUpperCase()} - {new Date(course.dateHeure).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
-                      </p>
+        {/* KPIs de base */}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Courses du jour</CardTitle>
+              <MapPin className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.coursesToday}</div>
+              <p className="text-xs text-muted-foreground">
+                {getGrowthPercentage()} par rapport à hier
+              </p>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Chauffeurs actifs</CardTitle>
+              <Car className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.chauffeursActifs}</div>
+              <p className="text-xs text-muted-foreground">
+                Sur {stats.totalChauffeurs} chauffeurs
+              </p>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Clients</CardTitle>
+              <Users className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.totalClients}</div>
+              <p className="text-xs text-muted-foreground">Clients enregistrés</p>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">En attente</CardTitle>
+              <Calendar className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.coursesEnAttente}</div>
+              <p className="text-xs text-muted-foreground">Courses à assigner</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Métriques de revenus */}
+        <RevenueChart />
+
+        {/* Graphiques principaux */}
+        <div className="grid gap-6 lg:grid-cols-2">
+          <CoursesTimeline />
+          <ChauffeurPerformance />
+        </div>
+
+        {/* Section détaillée */}
+        <div className="grid gap-6 lg:grid-cols-3">
+          {/* Top Chauffeurs */}
+          <TopChauffeurs />
+          
+          {/* Courses récentes */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Courses récentes</CardTitle>
+              <CardDescription>Les dernières courses terminées</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {stats.recentCourses.length > 0 ? (
+                  stats.recentCourses.map((course: any) => (
+                    <div key={course.id} className="flex items-center space-x-4">
+                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                      <div className="flex-1 space-y-1">
+                        <p className="text-sm font-medium">{course.origine} → {course.destination}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {course.client.prenom} {course.client.nom.toUpperCase()} - {new Date(course.dateHeure).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                      </div>
+                      <div className="text-sm font-medium">{course.prix ? `${course.prix}€` : '-'}</div>
                     </div>
-                    <div className="text-sm font-medium">{course.prix ? `${course.prix}€` : '-'}</div>
-                  </div>
-                ))
-              ) : (
-                <p className="text-sm text-muted-foreground">Aucune course récente</p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardHeader>
-            <CardTitle>Chauffeurs disponibles</CardTitle>
-            <CardDescription>
-              État actuel de l&apos;équipe
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {stats.availableChauffeurs.length > 0 ? (
-                stats.availableChauffeurs.map((chauffeur: any) => (
-                  <div key={chauffeur.id} className="flex items-center space-x-4">
-                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                    <div className="flex-1 space-y-1">
-                      <p className="text-sm font-medium">{chauffeur.prenom} {chauffeur.nom.toUpperCase()}</p>
-                      <p className="text-xs text-muted-foreground">{chauffeur.vehicule} - Disponible</p>
+                  ))
+                ) : (
+                  <p className="text-sm text-muted-foreground">Aucune course récente</p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+          
+          {/* Chauffeurs disponibles */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Équipe disponible</CardTitle>
+              <CardDescription>Chauffeurs prêts à prendre des courses</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {stats.availableChauffeurs.length > 0 ? (
+                  stats.availableChauffeurs.map((chauffeur: any) => (
+                    <div key={chauffeur.id} className="flex items-center space-x-4">
+                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                      <div className="flex-1 space-y-1">
+                        <p className="text-sm font-medium">{chauffeur.prenom} {chauffeur.nom.toUpperCase()}</p>
+                        <p className="text-xs text-muted-foreground">{chauffeur.vehicule} - Disponible</p>
+                      </div>
                     </div>
-                  </div>
-                ))
-              ) : (
-                <p className="text-sm text-muted-foreground">Aucun chauffeur disponible</p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-muted-foreground">Aucun chauffeur disponible</p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   )

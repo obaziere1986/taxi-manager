@@ -51,3 +51,4 @@ prisma/dev.db-journal
 *.swo
 
 /src/generated/prisma
+node_modules

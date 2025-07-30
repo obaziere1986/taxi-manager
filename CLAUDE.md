@@ -1,76 +1,201 @@
-# CLAUDE.md
+# Taxi Manager - Guide de Développement
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Ce fichier fournit une documentation complète pour Claude Code et les développeurs travaillant sur cette application de gestion de taxi.
 
-## Development Commands
+## 🚀 Démarrage Rapide
 
-### Core Development
-- `pnpm dev` - Start development server with Turbopack on http://localhost:3000
-- `pnpm build` - Build production application
-- `pnpm start` - Start production server
-- `pnpm lint` - Run ESLint on codebase
+Ce projet Next.js utilise **pnpm** comme gestionnaire de packages. Commandes de base :
 
-### Database Management
-- `pnpm exec prisma db push` - Apply schema changes to SQLite database
-- `pnpm exec prisma generate` - Generate Prisma client after schema changes
-- `pnpm exec prisma studio` - Open Prisma Studio on http://localhost:5555
-- `pnpm exec ts-node scripts/seed.ts` - Populate database with test data (10 chauffeurs, 50 clients, ~55 courses)
-
-### Database Reset
-When changing models or need fresh data:
 ```bash
-rm prisma/dev.db
-pnpm exec prisma db push
-pnpm exec ts-node scripts/seed.ts
+pnpm dev          # Serveur de développement (http://localhost:3000)
+pnpm build        # Build de production
+pnpm start        # Serveur de production
+pnpm lint         # Analyse ESLint
+pnpm dev:restart  # Redémarrage forcé (kill port 3000)
 ```
 
-## Architecture Overview
+### Base de Données
+```bash
+pnpm exec prisma db push      # Appliquer le schéma
+pnpm exec prisma generate     # Générer le client Prisma
+pnpm exec prisma studio       # Interface graphique (http://localhost:5555)
+pnpm run db:seed              # Peupler avec des données de test
+pnpm run db:reset             # Reset complet + seeding
+```
 
-### Application Structure
-This is a **French-language taxi management system** built with Next.js 15, TypeScript, and SQLite. The application manages clients, chauffeurs (drivers), and courses (rides) with a drag-and-drop planning interface.
+## 🏗️ Architecture de l'Application
 
-### Core Data Models
-- **Client**: `nom`, `prenom`, `telephone`, `email`, `adresses` (JSON array)
-- **Chauffeur**: `nom`, `prenom`, `telephone`, `vehicule`, `statut` (DISPONIBLE/OCCUPE/HORS_SERVICE)
-- **Course**: `origine`, `destination`, `dateHeure`, `statut` (EN_ATTENTE/ASSIGNEE/EN_COURS/TERMINEE/ANNULEE), `prix`, `notes`
+### Vue d'Ensemble
+**Système de gestion de taxi en français** construit avec :
+- **Next.js 15** (App Router) + TypeScript
+- **SQLite** + Prisma ORM  
+- **Tailwind CSS v4** + shadcn/ui
+- **Recharts** pour les graphiques
+- **@dnd-kit** pour le drag-and-drop
 
-### Key Features
-- **Dashboard**: Real-time statistics with day-over-day comparisons
-- **CRUD Operations**: Full create/read/update/delete for all entities
-- **Planning Interface**: Drag-and-drop course assignment using @dnd-kit
-- **Date Navigation**: Filter courses by date with French localization
+### Modèles de Données Principaux
 
-### Component Architecture
-- **shadcn/ui**: Base UI components in `/src/components/ui/`
-- **Feature Components**: Planning-specific components in `/src/components/planning/`
-- **AppSidebar**: Collapsible navigation with French labels
-- **Drag & Drop**: CourseCard (draggable), ChauffeurColumn/UnassignedColumn (droppable)
+**Client**
+- `nom`, `prenom`, `telephone`, `email?`, `adresses?` (JSON array)
+- Relations: `courses[]`
 
-### API Structure
-RESTful APIs follow pattern: `/api/{entity}` (GET/POST) and `/api/{entity}/[id]` (GET/PUT/DELETE)
-Special endpoint: `/api/courses/[id]/assign` for drag-and-drop assignment
+**Chauffeur** 
+- `nom`, `prenom`, `telephone`, `vehicule`
+- `statut` : DISPONIBLE | OCCUPE | HORS_SERVICE
+- Relations: `courses[]`
 
-### Database Connection
-- Prisma client singleton in `/src/lib/prisma.ts`
-- SQLite database at `prisma/dev.db`
-- French field names and enums throughout schema
+**Course**
+- `origine`, `destination`, `dateHeure`, `prix?`, `notes?`
+- `statut` : EN_ATTENTE | ASSIGNEE | EN_COURS | TERMINEE | ANNULEE
+- Relations: `client`, `chauffeur?`
 
-### Development Patterns
-- All UI text in French
-- Client-side components with "use client" directive
-- React Hook Form + Zod validation for forms
-- date-fns with French locale for date handling
-- Cursor pointer CSS applied globally to all buttons
+## 🎯 Fonctionnalités Principales
 
-### Styling
-- Tailwind CSS v4 with custom CSS variables
-- shadcn/ui color system with light/dark mode support
-- Responsive grid layouts with mobile-first approach
-- Status indicators with color coding (green/orange/red)
+### 📊 Dashboard Avancé
+- **KPIs en temps réel** : courses du jour, chauffeurs actifs, revenus
+- **Graphiques interactifs** (Recharts) :
+  - Timeline des courses (7 jours)
+  - Performance des chauffeurs (barres) 
+  - Évolution des revenus (aires)
+- **Classement chauffeurs** avec métriques détaillées
+- **Statistiques financières** avec taux de croissance
 
-## Important Notes
-- The application is fully localized in French - maintain this when adding features
-- Drag-and-drop planning is the core feature - test thoroughly when modifying
-- Form validation uses both frontend (Zod) and basic backend validation
-- Dashboard statistics calculate from real data - no hardcoded values
-- Database seeding script creates realistic French names and Parisian addresses
+### 👥 Gestion des Clients
+- **Répertoire alphabétique** avec séparateurs par lettre
+- **Format "NOM, Prénom"** style Apple
+- **Modal de détails** avec historique complet des courses
+- **Statistiques client** : total courses, CA généré, taux d'annulation
+- **CRUD complet** avec validation
+
+### 🚗 Gestion des Chauffeurs  
+- **Vue d'ensemble** avec statuts en temps réel
+- **Métriques de performance** individuelles
+- **CRUD complet** avec gestion des véhicules
+
+### 📅 Planning Interactif
+- **Interface drag-and-drop** pour assigner les courses
+- **Navigation par date** avec localisation française
+- **Colonnes par chauffeur** + colonne "non assignées"
+- **Statuts visuels** avec codes couleur
+- **Création de courses** depuis le planning
+
+## 🛠️ Structure du Code
+
+### APIs
+```
+/api/clients/          # CRUD clients
+/api/chauffeurs/       # CRUD chauffeurs  
+/api/courses/          # CRUD courses
+  └── [id]/assign/     # Assignation drag-and-drop
+/api/analytics/        # APIs pour dashboard
+  ├── courses-timeline/     # Données temporelles
+  ├── chauffeur-performance/ # Métriques chauffeurs
+  └── revenue-stats/         # Statistiques financières
+```
+
+### Composants
+```
+src/components/
+├── ui/                    # shadcn/ui base components
+├── dashboard/
+│   ├── charts/           # Graphiques Recharts
+│   │   ├── CoursesTimeline.tsx
+│   │   ├── ChauffeurPerformance.tsx
+│   │   └── RevenueChart.tsx
+│   └── metrics/          # Métriques business
+│       └── TopChauffeurs.tsx
+└── planning/             # Composants drag-and-drop
+    ├── CourseCard.tsx
+    ├── ChauffeurColumn.tsx
+    └── UnassignedColumn.tsx
+```
+
+### Base de Données
+- **Connection robuste** : `/src/lib/db.ts` avec retry automatique
+- **Client Prisma** : Pool de connexions avec reconnexion
+- **SQLite** : `prisma/dev.db` (development)
+- **Seeding** diversifié avec noms multiculturels
+
+## 🎨 Interface Utilisateur
+
+### Design System
+- **Tailwind CSS v4** avec variables CSS custom
+- **shadcn/ui** pour cohérence visuelle
+- **Responsive design** mobile-first
+- **Mode sombre** supporté
+
+### Conventions UX
+- **Texte entièrement en français**
+- **Indicateurs de statut** colorés (vert/orange/rouge)
+- **Feedback utilisateur** avec états de chargement
+- **Navigation intuitive** avec sidebar collapsible
+
+## 📈 Analytics & Métriques
+
+### KPIs Trackés
+- **Courses** : total, terminées, en attente, croissance
+- **Revenus** : jour/semaine/mois, prix moyen, taux de croissance
+- **Chauffeurs** : disponibilité, efficacité, temps de conduite
+- **Clients** : fidélité, CA individuel, historique
+
+### Visualisations
+- **Timeline** : évolution sur 7 jours
+- **Barres** : top chauffeurs par performance  
+- **Aires** : tendances de revenus
+- **Classements** : podium avec trophées
+
+## 🔧 Patterns de Développement
+
+### Gestion d'État
+- **React Hooks** (useState, useEffect)
+- **Pas de state management** global (simplicité)
+- **Chargement asynchrone** avec états loading/error
+
+### Validation
+- **React Hook Form** + **Zod** côté client
+- **Validation basique** côté serveur APIs
+- **Messages d'erreur** en français
+
+### Dates & Localisation
+- **date-fns** avec locale française
+- **Formatage cohérent** : dd/MM/yyyy, HH:mm
+- **Navigation temporelle** dans planning
+
+## ⚠️ Points d'Attention
+
+### Stabilité
+- **Prisma** : Utiliser `/src/lib/db.ts` avec retry automatique
+- **Node.js v23** : Peut avoir des incompatibilités, préférer LTS
+- **Hot reload** : Redémarrer serveur après modifications importantes
+
+### Performance
+- **SQLite** : Limites de concurrence, considérer PostgreSQL en production
+- **Recharts** : Optimisé pour datasets < 1000 points
+- **Images** : Pas d'optimisation Next.js actuellement
+
+### Maintenance
+- **Tests** : Pas encore implémentés
+- **Logs** : Console uniquement en development  
+- **Monitoring** : Basique, à améliorer pour production
+
+## 📋 État Actuel
+
+### ✅ Fonctionnel
+- Dashboard complet avec analytics
+- CRUD toutes entités
+- Planning drag-and-drop  
+- Répertoire clients avec historique
+- APIs robustes avec retry
+- Interface responsive
+
+### 🔄 En Cours / À Améliorer  
+- Quelques requêtes SQL à optimiser
+- Gestion d'erreurs à harmoniser
+- Tests automatisés à implémenter
+- Mode production à configurer
+
+---
+
+**Dernière mise à jour** : 29 janvier 2025
+**Stack** : Next.js 15 + TypeScript + SQLite + Tailwind + shadcn/ui + Recharts
+**Environnement** : Development avec pnpm + Node.js

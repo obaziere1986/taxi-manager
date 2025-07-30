@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { PageHeader } from '@/components/page-header'
-import { Calendar, ChevronLeft, ChevronRight, Clock, User, MapPin, Plus, Zap, CheckCircle, UserPlus } from 'lucide-react'
+import { Calendar, ChevronLeft, ChevronRight, Clock, User, MapPin, Plus, Zap, CheckCircle, UserPlus, Euro, Edit } from 'lucide-react'
 import { format, addDays, subDays, startOfDay, endOfDay, addHours, startOfHour } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import {
@@ -72,12 +72,6 @@ export default function PlanningPage() {
   const [courses, setCourses] = useState<Course[]>([])
   const [chauffeurs, setChauffeurs] = useState<Chauffeur[]>([])
   const [loading, setLoading] = useState(true)
-  const [confirmDialog, setConfirmDialog] = useState<{
-    isOpen: boolean
-    course?: Course
-    chauffeur?: Chauffeur
-    hour?: number
-  }>({ isOpen: false })
   const [activeId, setActiveId] = useState<string | null>(null)
   const [activeCourse, setActiveCourse] = useState<Course | null>(null)
   const [dragOverSlot, setDragOverSlot] = useState<string | null>(null)
@@ -85,6 +79,19 @@ export default function PlanningPage() {
     isOpen: boolean
     course?: Course
   }>({ isOpen: false })
+  const [editingCourse, setEditingCourse] = useState(false)
+  const [editCourseFormData, setEditCourseFormData] = useState({
+    origine: '',
+    destination: '',
+    dateHeure: '',
+    prix: '',
+    notes: ''
+  })
+  const [assignmentDialog, setAssignmentDialog] = useState<{
+    isOpen: boolean
+    course?: Course
+  }>({ isOpen: false })
+  const [isDragging, setIsDragging] = useState(false)
   const [createCourseDialog, setCreateCourseDialog] = useState(false)
   const [clients, setClients] = useState<Client[]>([])
   const [showNewClientForm, setShowNewClientForm] = useState(false)
@@ -104,7 +111,11 @@ export default function PlanningPage() {
   })
 
   const sensors = useSensors(
-    useSensor(PointerSensor),
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8, // Minimum de 8px de mouvement pour déclencher le drag
+      },
+    }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     })
@@ -114,6 +125,29 @@ export default function PlanningPage() {
     fetchData()
     fetchClients()
   }, [selectedDate])
+
+  // Auto-scroll vers l'heure actuelle au chargement (seulement pour aujourd'hui)
+  useEffect(() => {
+    if (isToday() && !loading) {
+      const currentHour = getCurrentHour()
+      const timeSlots = generateTimeSlots()
+      const currentIndex = timeSlots.findIndex(hour => hour === currentHour)
+      
+      if (currentIndex >= 0) {
+        // Scroll vers la colonne de l'heure actuelle avec un léger offset
+        setTimeout(() => {
+          const headerElement = document.querySelector(`th:nth-child(${currentIndex + 2})`) // +2 car première colonne = chauffeurs
+          if (headerElement) {
+            headerElement.scrollIntoView({ 
+              behavior: 'smooth', 
+              block: 'nearest', 
+              inline: 'center' 
+            })
+          }
+        }, 100)
+      }
+    }
+  }, [loading, selectedDate])
 
   const fetchClients = async () => {
     try {
@@ -136,6 +170,21 @@ export default function PlanningPage() {
         coursesRes.json(),
         chauffeursRes.json()
       ])
+
+      // Vérifier si les réponses sont valides
+      if (!Array.isArray(coursesData)) {
+        console.error('coursesData n\'est pas un tableau:', coursesData)
+        setCourses([])
+        setChauffeurs([])
+        return
+      }
+
+      if (!Array.isArray(chauffeursData)) {
+        console.error('chauffeursData n\'est pas un tableau:', chauffeursData)
+        setCourses([])
+        setChauffeurs([])
+        return
+      }
 
       // Filtrer les courses pour la date sélectionnée
       const dayStart = startOfDay(selectedDate)
@@ -214,6 +263,108 @@ export default function PlanningPage() {
     return new Date().getHours()
   }
 
+  // Fonction pour déterminer si une course est passée
+  const isCourseInPast = (course: Course) => {
+    if (!isToday()) return false
+    const courseDate = new Date(course.dateHeure)
+    const now = new Date()
+    return courseDate < now
+  }
+
+  // Fonction pour obtenir le statut réel d'une course basé sur l'heure actuelle
+  const getRealCourseStatus = (course: Course) => {
+    // Si ce n'est pas aujourd'hui, retourner le statut original
+    if (!isToday()) return course.statut
+    
+    const courseDate = new Date(course.dateHeure)
+    const now = new Date()
+    const courseEndTime = new Date(courseDate.getTime() + (60 * 60 * 1000)) // +1h pour la durée estimée
+    
+    // Si la course est dans le futur, elle ne peut pas être terminée
+    if (courseDate > now) {
+      if (course.statut === 'TERMINEE') {
+        return course.chauffeur ? 'ASSIGNEE' : 'EN_ATTENTE'
+      }
+      return course.statut
+    }
+    
+    // Si la course est en cours (dans l'heure actuelle)
+    if (courseDate <= now && now <= courseEndTime) {
+      if (course.statut === 'ASSIGNEE' || course.statut === 'EN_COURS') {
+        return 'EN_COURS'
+      }
+    }
+    
+    // Sinon, retourner le statut original
+    return course.statut
+  }
+
+  // Fonction pour obtenir la couleur d'une course selon son état temporel et statut
+  const getCourseColor = (course: Course) => {
+    if (isCourseInPast(course)) {
+      // Course passée
+      if (course.statut === 'TERMINEE') {
+        return 'bg-green-100 border-green-300' // Vert pour terminée
+      } else if (course.statut === 'ANNULEE') {
+        return 'bg-red-100 border-red-300' // Rouge pour annulée
+      } else {
+        return 'bg-red-100 border-red-300' // Rouge pour les courses passées non terminées
+      }
+    } else {
+      // Course future
+      if (course.statut === 'EN_ATTENTE') {
+        return 'bg-gray-100 border-gray-300' // Gris pour en attente
+      } else {
+        return 'bg-blue-100 border-blue-300' // Bleu pour assignées/en cours
+      }
+    }
+  }
+
+  // Fonction pour obtenir tous les chauffeurs avec leurs infos pour une course
+  const getAvailableDriversForCourse = (course: Course) => {
+    const courseDate = new Date(course.dateHeure)
+    const courseHour = courseDate.getHours()
+    
+    return chauffeurs
+      .map(chauffeur => {
+        // Obtenir toutes les courses de ce chauffeur pour le jour sélectionné
+        const allCoursesForDriver = courses.filter(c => 
+          c.chauffeur?.id === chauffeur.id &&
+          new Date(c.dateHeure).toDateString() === selectedDate.toDateString()
+        )
+        
+        // Trouver course précédente et suivante par rapport à l'heure de la nouvelle course
+        const previousCourse = allCoursesForDriver
+          .filter(c => new Date(c.dateHeure) < courseDate && c.id !== course.id)
+          .sort((a, b) => new Date(b.dateHeure).getTime() - new Date(a.dateHeure).getTime())[0]
+        
+        const nextCourse = allCoursesForDriver
+          .filter(c => new Date(c.dateHeure) > courseDate && c.id !== course.id)
+          .sort((a, b) => new Date(a.dateHeure).getTime() - new Date(b.dateHeure).getTime())[0]
+        
+        const isAvailable = isChauffeurAvailable(chauffeur.id, courseHour)
+        const isCompatible = isSlotCompatible(course, courseHour)
+        const canAssign = chauffeur.statut === 'DISPONIBLE' && isAvailable && isCompatible
+        
+        return {
+          ...chauffeur,
+          previousCourse,
+          nextCourse,
+          isAvailable,
+          isCompatible,
+          canAssign
+        }
+      })
+      .sort((a, b) => {
+        // Tri : assignables en premier, puis par compatibilité, puis par nom
+        if (a.canAssign && !b.canAssign) return -1
+        if (!a.canAssign && b.canAssign) return 1
+        if (a.isCompatible && !b.isCompatible) return -1
+        if (!a.isCompatible && b.isCompatible) return 1
+        return a.nom.localeCompare(b.nom)
+      })
+  }
+
   const formatHour = (hour: number) => {
     return `${hour}:00`
   }
@@ -287,83 +438,42 @@ export default function PlanningPage() {
     })
   }
 
-  const openAssignDialog = (course: Course | null, chauffeur: Chauffeur, hour: number) => {
-    // Vérifier si le créneau est libre
-    if (!isChauffeurAvailable(chauffeur.id, hour)) {
-      alert('Ce créneau est déjà occupé')
-      return
-    }
 
-    // Si pas de course spécifiée, trouver les courses compatibles
-    if (!course) {
-      const compatibleCourses = getCompatibleCourses(hour)
-      
-      if (compatibleCourses.length === 0) {
-        alert(`Aucune course compatible trouvée pour le créneau ${formatHour(hour)}`)
-        return
-      }
-      
-      if (compatibleCourses.length === 1) {
-        // Une seule course compatible, l'assigner directement
-        course = compatibleCourses[0]
-      } else {
-        // Plusieurs courses compatibles - pour l'instant on prend la première
-        // TODO: Implémenter le sélecteur de course
-        course = compatibleCourses[0]
-        console.log(`${compatibleCourses.length} courses compatibles trouvées pour ${formatHour(hour)}, assignation de la première`)
-      }
-    }
-
-    setConfirmDialog({
-      isOpen: true,
-      course,
-      chauffeur,
-      hour
-    })
-  }
-
-  const confirmAssignment = async () => {
-    const { course, chauffeur } = confirmDialog
-    if (!course || !chauffeur) return
-    
-    try {
-      // Assigner uniquement le chauffeur, SANS modifier l'heure de la course
-      const updateResponse = await fetch(`/api/courses/${course.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          chauffeurId: chauffeur.id,
-          statut: 'ASSIGNEE'
-        }),
-      })
-
-      if (!updateResponse.ok) {
-        const errorData = await updateResponse.json()
-        console.error('Erreur API:', errorData)
-        throw new Error('Erreur lors de l\'assignation')
-      }
-
-      // Recharger les données pour voir les changements
-      await fetchData()
-      
-      // Debug : vérifier que la course a bien été mise à jour
-      console.log('Course assignée avec succès, rechargement des données...')
-      
-      // Fermer la modale
-      setConfirmDialog({ isOpen: false })
-    } catch (error) {
-      console.error('Erreur lors de l\'assignation:', error)
-      alert('Erreur lors de l\'assignation de la course')
-    }
-  }
 
   const handleDragStart = (event: DragStartEvent) => {
-    const courseId = event.active.id as string
-    setActiveId(courseId)
+    const activeId = event.active.id as string
+    setActiveId(activeId)
+    setIsDragging(true)
+    
+    // Extraire l'ID réel de la course (enlever le préfixe "planning-" si présent)
+    let courseId = activeId
+    if (activeId.startsWith('planning-')) {
+      courseId = activeId.replace('planning-', '')
+    }
+    
     const course = courses.find(c => c.id === courseId)
     setActiveCourse(course || null)
+    
+    // Auto-scroll vers l'heure de la course pour les courses non assignées
+    if (course && !course.chauffeur) {
+      setTimeout(() => {
+        const courseDate = new Date(course.dateHeure)
+        const courseHour = courseDate.getHours()
+        const timeSlots = generateTimeSlots()
+        const hourIndex = timeSlots.findIndex(hour => hour === courseHour)
+        
+        if (hourIndex >= 0) {
+          const headerElement = document.querySelector(`th:nth-child(${hourIndex + 2})`) // +2 car première colonne = chauffeurs
+          if (headerElement) {
+            headerElement.scrollIntoView({ 
+              behavior: 'smooth', 
+              block: 'nearest', 
+              inline: 'center' 
+            })
+          }
+        }
+      }, 100)
+    }
   }
 
   const handleDragOver = (event: DragOverEvent) => {
@@ -376,22 +486,50 @@ export default function PlanningPage() {
     setActiveId(null)
     setActiveCourse(null)
     setDragOverSlot(null)
+    setIsDragging(false)
 
     if (!over) return
 
-    const courseId = active.id as string
+    const activeId = active.id as string
+    let courseId = activeId
+    
+    // Si c'est une course du planning, retirer le préfixe
+    if (activeId.startsWith('planning-')) {
+      courseId = activeId.replace('planning-', '')
+    }
+    
     const course = courses.find(c => c.id === courseId)
     if (!course) return
 
     const dropId = over.id as string
+    
+    // Si on drop vers "unassigned", désassigner la course
+    if (dropId === 'unassigned') {
+      handleCourseAssign(courseId, null)
+      return
+    }
+    
     const [chauffeurId, hourStr] = dropId.split('-')
     const hour = parseInt(hourStr)
 
     const chauffeur = chauffeurs.find(c => c.id === chauffeurId)
     if (!chauffeur) return
 
-    // Ouvrir la modale de confirmation
-    openAssignDialog(course, chauffeur, hour)
+    // Si la course n'est pas assignée, assigner directement
+    if (!course.chauffeur) {
+      handleCourseAssign(courseId, chauffeurId)
+      return
+    }
+
+    // Si la course est déjà assignée à un autre chauffeur, demander confirmation
+    if (course.chauffeur.id !== chauffeurId) {
+      if (confirm(`Êtes-vous sûr de vouloir réassigner cette course à ${chauffeur.prenom} ${chauffeur.nom.toUpperCase()} ?`)) {
+        handleCourseAssign(courseId, chauffeurId)
+      }
+      return
+    }
+
+    // Si on drop sur le même chauffeur, ne rien faire
   }
 
   const resetCourseForm = () => {
@@ -477,10 +615,12 @@ export default function PlanningPage() {
     )
   }
 
-  // Composant pour les courses draggables
+  // Composant pour les courses draggables (colonne en attente)
   const DraggableCourse = ({ course }: { course: Course }) => {
+    const [isClicking, setIsClicking] = useState(false)
     const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
       id: course.id,
+      disabled: isClicking, // Désactiver le drag pendant le clic
     })
 
     const style = {
@@ -492,9 +632,22 @@ export default function PlanningPage() {
       <Card 
         ref={setNodeRef} 
         style={style} 
-        {...listeners} 
-        {...attributes}
-        className="p-3 cursor-grab hover:shadow-md transition-shadow active:cursor-grabbing"
+        {...(isClicking ? {} : listeners)}
+        {...(isClicking ? {} : attributes)}
+        className="p-3 cursor-pointer hover:shadow-md transition-shadow bg-gray-100 border border-gray-300"
+        onClick={(e) => {
+          e.preventDefault()
+          e.stopPropagation()
+          setIsClicking(true)
+          // Si la course n'est pas assignée, ouvrir la modal d'assignation
+          if (!course.chauffeur || course.statut === 'EN_ATTENTE') {
+            setAssignmentDialog({ isOpen: true, course })
+          } else {
+            setCourseDetailsDialog({ isOpen: true, course })
+          }
+          // Reset après un délai
+          setTimeout(() => setIsClicking(false), 100)
+        }}
       >
         <div className="space-y-2">
           <div className="flex items-center text-xs font-medium">
@@ -508,11 +661,76 @@ export default function PlanningPage() {
             <User className="h-3 w-3 mr-1" />
             {course.client.prenom} {course.client.nom.toUpperCase()}
           </div>
-          <Badge variant="secondary" className="text-xs">
-            {formatStatut(course.statut)}
+          <Badge 
+            variant="secondary" 
+            className={`text-xs ${
+              getRealCourseStatus(course) === 'TERMINEE' ? 'bg-green-500 text-white hover:bg-green-600' :
+              getRealCourseStatus(course) === 'ANNULEE' ? 'bg-red-500 text-white hover:bg-red-600' :
+              getRealCourseStatus(course) === 'EN_COURS' ? 'bg-green-500 text-white hover:bg-green-600 animate-pulse' :
+              'bg-gray-500 text-white hover:bg-gray-600'
+            }`}
+          >
+            {formatStatut(getRealCourseStatus(course))}
           </Badge>
         </div>
       </Card>
+    )
+  }
+
+  // Composant pour les courses dans le planning (draggables également)
+  const PlanningCourse = ({ course }: { course: Course }) => {
+    const [isClicking, setIsClicking] = useState(false)
+    const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+      id: `planning-${course.id}`, // Préfixe pour différencier
+      disabled: isClicking, // Désactiver le drag si on clique
+    })
+
+    const style = {
+      transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
+      opacity: isDragging ? 0.5 : 1,
+    }
+
+    const handleClick = (e: React.MouseEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+      setIsClicking(true)
+      // Toujours ouvrir les détails pour les courses dans le planning
+      setCourseDetailsDialog({ isOpen: true, course })
+      setTimeout(() => setIsClicking(false), 100)
+    }
+
+    return (
+      <div 
+        ref={setNodeRef}
+        style={style}
+        {...(isClicking ? {} : listeners)} 
+        {...(isClicking ? {} : attributes)}
+        className="bg-gray-100 border border-gray-300 rounded p-2 text-xs cursor-pointer hover:opacity-80 transition-colors w-full overflow-hidden"
+        onClick={handleClick}
+      >
+        <div className="flex items-center justify-between mb-1">
+          <div className="font-medium text-blue-900 text-xs">
+            {format(new Date(course.dateHeure), 'HH:mm', { locale: fr })}
+          </div>
+          <Badge 
+            variant="secondary" 
+            className={`text-xs ${
+              getRealCourseStatus(course) === 'TERMINEE' ? 'bg-green-500 text-white hover:bg-green-600' :
+              getRealCourseStatus(course) === 'ANNULEE' ? 'bg-red-500 text-white hover:bg-red-600' :
+              getRealCourseStatus(course) === 'EN_COURS' ? 'bg-green-500 text-white hover:bg-green-600 animate-pulse' :
+              'bg-gray-500 text-white hover:bg-gray-600'
+            }`}
+          >
+            {formatStatut(getRealCourseStatus(course))}
+          </Badge>
+        </div>
+        <div className="font-medium text-blue-900 truncate text-xs">
+          {course.origine} → {course.destination}
+        </div>
+        <div className="text-blue-700 truncate text-xs">
+          {course.client.prenom} {course.client.nom.toUpperCase()}
+        </div>
+      </div>
     )
   }
 
@@ -527,19 +745,38 @@ export default function PlanningPage() {
     })
 
     const slotId = `${chauffeurId}-${hour}`
-    const isHighlighted = dragOverSlot === slotId && activeCourse && isChauffeurAvailable(chauffeurId, hour)
+    const isAvailable = isChauffeurAvailable(chauffeurId, hour)
     const isCompatible = activeCourse && isSlotCompatible(activeCourse, hour)
+    const chauffeur = chauffeurs.find(c => c.id === chauffeurId)
+    const isChauffeurAvailableForDrag = chauffeur?.statut === 'DISPONIBLE'
+    
+    // Logique de coloration pendant le drag
+    let slotClass = 'p-0 border-r text-center transition-colors w-36 min-w-[140px] max-w-[140px] relative'
+    
+    if (activeCourse) {
+      if (isOver) {
+        if (isCompatible && isAvailable && isChauffeurAvailableForDrag) {
+          slotClass += ' bg-green-100 border-green-300 ring-2 ring-green-300'
+        } else {
+          slotClass += ' bg-red-100 border-red-300 ring-2 ring-red-300'
+        }
+      } else {
+        if (isCompatible && isAvailable && isChauffeurAvailableForDrag) {
+          slotClass += ' bg-green-50 border-green-200'
+        } else {
+          slotClass += ' bg-gray-200 opacity-50'
+        }
+      }
+    }
 
     return (
-      <td 
-        ref={setNodeRef}
-        className={`p-1 border-r text-center transition-colors ${
-          isOver && isCompatible ? 'bg-green-100 border-green-300 ring-2 ring-green-300' : 
-          isHighlighted && isCompatible ? 'bg-green-50 border-green-200' :
-          isOver ? 'bg-red-100 border-red-300' : ''
-        }`}
-      >
-        {children}
+      <td className={slotClass}>
+        <div 
+          ref={setNodeRef}
+          className="w-full h-full min-h-[48px] flex items-center justify-center"
+        >
+          {children}
+        </div>
       </td>
     )
   }
@@ -552,6 +789,24 @@ export default function PlanningPage() {
     // Tolérance de 30 minutes
     const timeDifference = Math.abs(courseHour - hour)
     return timeDifference <= 0.5
+  }
+
+  // Composant pour la zone de drop des courses non assignées
+  const UnassignedDropZone = ({ children }: { children: React.ReactNode }) => {
+    const { setNodeRef, isOver } = useDroppable({
+      id: 'unassigned',
+    })
+
+    return (
+      <div 
+        ref={setNodeRef}
+        className={`space-y-3 p-6 flex-1 overflow-y-auto transition-colors ${
+          isOver ? 'bg-gray-100' : ''
+        }`}
+      >
+        {children}
+      </div>
+    )
   }
 
   return (
@@ -578,13 +833,6 @@ export default function PlanningPage() {
           onChange={(e) => setSelectedDate(new Date(e.target.value))}
           className="flex items-center space-x-2 px-4 py-2 bg-muted rounded-md border-0 font-medium cursor-pointer"
         />
-        
-        <div className="flex items-center space-x-2 px-2 py-2 bg-muted rounded-md text-sm">
-          <Calendar className="h-4 w-4" />
-          <span className="font-medium">
-            {format(selectedDate, 'EEEE d MMMM', { locale: fr })}
-          </span>
-        </div>
         
         <Button
           variant="outline"
@@ -641,9 +889,12 @@ export default function PlanningPage() {
 
       {/* Planning avec Timeline */}
       <div className="flex-1 p-6 flex flex-col overflow-hidden">
-        <div className="grid grid-cols-12 gap-6 flex-1 min-h-0">
+        <div className={`grid gap-6 flex-1 min-h-0 ${
+          getUnassignedCourses().length > 0 ? 'grid-cols-12' : 'grid-cols-1'
+        }`}>
           
           {/* Panel gauche - Courses non assignées */}
+          {getUnassignedCourses().length > 0 && (
           <div className="col-span-3 flex flex-col min-h-0">
             <Card className="flex-1 flex flex-col min-h-0">
               <CardHeader>
@@ -653,7 +904,7 @@ export default function PlanningPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="flex-1 flex flex-col min-h-0 p-0">
-                <div className="space-y-3 p-6 flex-1 overflow-y-auto">
+                <UnassignedDropZone>
                 {getUnassignedCourses()
                   .sort((a, b) => new Date(a.dateHeure).getTime() - new Date(b.dateHeure).getTime())
                   .map((course) => (
@@ -664,13 +915,16 @@ export default function PlanningPage() {
                       Toutes les courses sont assignées
                     </div>
                   )}
-                </div>
+                </UnassignedDropZone>
               </CardContent>
             </Card>
           </div>
+          )}
 
           {/* Timeline centrale */}
-          <div className="col-span-9 flex flex-col min-h-0">
+          <div className={`flex flex-col min-h-0 ${
+            getUnassignedCourses().length > 0 ? 'col-span-9' : 'col-span-1'
+          }`}>
             <Card className="flex-1 flex flex-col min-h-0">
               <CardHeader>
                 <CardTitle className="text-sm flex items-center justify-between">
@@ -708,14 +962,14 @@ export default function PlanningPage() {
                           Chauffeur
                         </th>
                         {generateTimeSlots().map((hour) => (
-                          <th key={hour} className={`w-24 p-2 text-center text-xs font-medium border-r ${
+                          <th key={hour} className={`w-36 min-w-[140px] max-w-[140px] p-2 text-center text-xs font-medium border-r ${
                             isToday() && hour === getCurrentHour() 
-                              ? 'bg-red-100 text-red-600 font-bold' 
+                              ? 'bg-blue-100 text-blue-600 font-bold' 
                               : 'text-muted-foreground'
                           }`}>
                             {formatHour(hour)}
                             {isToday() && hour === getCurrentHour() && (
-                              <div className="text-xs mt-1 text-red-500">MAINTENANT</div>
+                              <div className="text-xs mt-1 text-blue-500">MAINTENANT</div>
                             )}
                           </th>
                         ))}
@@ -758,54 +1012,17 @@ export default function PlanningPage() {
                           </td>
                           {generateTimeSlots().map((hour) => {
                             const course = getCourseForChauffeurAtHour(chauffeur.id, hour)
-                            const isAvailable = isChauffeurAvailable(chauffeur.id, hour)
-                            const compatibleCourses = getCompatibleCourses(hour)
-                            
                             const isCurrentHour = isToday() && hour === getCurrentHour()
                             
                             return (
                               <DroppableSlot key={hour} chauffeurId={chauffeur.id} hour={hour}>
-                                <div className={isCurrentHour ? 'bg-red-50 rounded' : ''}>
+                                <div className={`${isCurrentHour ? 'bg-blue-50' : ''} w-full h-full p-1`}>
                                 {course ? (
-                                  <div 
-                                    className="bg-blue-100 border border-blue-300 rounded p-2 text-xs cursor-pointer hover:bg-blue-200 transition-colors"
-                                    onClick={() => setCourseDetailsDialog({ isOpen: true, course })}
-                                  >
-                                    <div className="flex items-center justify-between mb-1">
-                                      <div className="font-medium text-blue-900 text-xs">
-                                        {format(new Date(course.dateHeure), 'HH:mm', { locale: fr })}
-                                      </div>
-                                      <Badge variant="secondary" className="text-xs">
-                                        {formatStatut(course.statut)}
-                                      </Badge>
-                                    </div>
-                                    <div className="font-medium text-blue-900 truncate text-xs">
-                                      {course.origine} → {course.destination}
-                                    </div>
-                                    <div className="text-blue-700 truncate text-xs">
-                                      {course.client.prenom} {course.client.nom.toUpperCase()}
-                                    </div>
-                                  </div>
-                                ) : isAvailable && chauffeur.statut === 'DISPONIBLE' ? (
-                                  compatibleCourses.length > 0 ? (
-                                    <div 
-                                      className="h-12 bg-green-50 border border-green-300 rounded hover:bg-green-100 cursor-pointer flex flex-col items-center justify-center transition-colors"
-                                      onClick={() => {
-                                        openAssignDialog(null, chauffeur, hour)
-                                      }}
-                                    >
-                                      <Plus className="h-3 w-3 text-green-600" />
-                                      <span className="text-xs text-green-700 font-medium">
-                                        {compatibleCourses.length}
-                                      </span>
-                                    </div>
-                                  ) : (
-                                    <div className="h-12 bg-gray-50 rounded border border-gray-200 flex items-center justify-center">
-                                      <span className="text-xs text-gray-400">-</span>
-                                    </div>
-                                  )
+                                  <PlanningCourse course={course} />
                                 ) : (
-                                  <div className="h-12 bg-gray-100 rounded border border-gray-300"></div>
+                                  <div className="h-12 bg-gray-50 rounded border border-gray-200 flex items-center justify-center">
+                                    <span className="text-xs text-gray-400">-</span>
+                                  </div>
                                 )}
                                 </div>
                               </DroppableSlot>
@@ -821,61 +1038,6 @@ export default function PlanningPage() {
           </div>
         </div>
 
-        {/* Modale de confirmation d'assignation */}
-        <Dialog open={confirmDialog.isOpen} onOpenChange={(open) => setConfirmDialog({ isOpen: open })}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle className="flex items-center">
-                <CheckCircle className="h-5 w-5 mr-2 text-green-600" />
-                Confirmer l'assignation
-              </DialogTitle>
-              <DialogDescription>
-                Vous êtes sur le point d'assigner une course à un chauffeur.
-              </DialogDescription>
-            </DialogHeader>
-            {confirmDialog.course && confirmDialog.chauffeur && confirmDialog.hour !== undefined && (
-              <div className="space-y-4">
-                <div className="border rounded-lg p-4 bg-muted/50">
-                  <h4 className="font-medium text-sm mb-2">Détails de la course</h4>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex items-center">
-                      <Clock className="h-4 w-4 mr-2 text-muted-foreground" />
-                      {format(new Date(confirmDialog.course.dateHeure), 'HH:mm', { locale: fr })} le {format(new Date(confirmDialog.course.dateHeure), 'dd/MM/yyyy', { locale: fr })}
-                    </div>
-                    <div className="flex items-center">
-                      <MapPin className="h-4 w-4 mr-2 text-muted-foreground" />
-                      {confirmDialog.course.origine} → {confirmDialog.course.destination}
-                    </div>
-                    <div className="flex items-center">
-                      <User className="h-4 w-4 mr-2 text-muted-foreground" />
-                      {confirmDialog.course.client.prenom} {confirmDialog.course.client.nom.toUpperCase()}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="border rounded-lg p-4 bg-blue-50">
-                  <h4 className="font-medium text-sm mb-2">Chauffeur assigné</h4>
-                  <div className="space-y-1 text-sm">
-                    <div>{confirmDialog.chauffeur.prenom} {confirmDialog.chauffeur.nom.toUpperCase()}</div>
-                    <div className="text-muted-foreground">{confirmDialog.chauffeur.vehicule}</div>
-                  </div>
-                </div>
-
-                <div className="flex justify-end space-x-2 pt-4">
-                  <Button 
-                    variant="outline" 
-                    onClick={() => setConfirmDialog({ isOpen: false })}
-                  >
-                    Annuler
-                  </Button>
-                  <Button onClick={confirmAssignment}>
-                    Confirmer l'assignation
-                  </Button>
-                </div>
-              </div>
-            )}
-          </DialogContent>
-        </Dialog>
 
         {/* Modale de création de course */}
         <Dialog open={createCourseDialog} onOpenChange={(open) => {
@@ -1062,86 +1224,419 @@ export default function PlanningPage() {
             </DialogHeader>
             {courseDetailsDialog.course && (
               <div className="space-y-4">
-                {/* Informations principales */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <div className="text-sm font-medium text-muted-foreground">Date et heure</div>
-                    <div className="text-sm">
-                      {format(new Date(courseDetailsDialog.course.dateHeure), 'EEEE d MMMM yyyy', { locale: fr })}
+                {!editingCourse ? (
+                  // Vue lecture seule
+                  <>
+                    {/* Informations principales */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <div className="text-sm font-medium text-muted-foreground">Date et heure</div>
+                        <div className="text-sm">
+                          {format(new Date(courseDetailsDialog.course.dateHeure), 'EEEE d MMMM yyyy', { locale: fr })}
+                        </div>
+                        <div className="text-lg font-bold text-blue-600">
+                          {format(new Date(courseDetailsDialog.course.dateHeure), 'HH:mm', { locale: fr })}
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <div className="text-sm font-medium text-muted-foreground">Statut</div>
+                        <Badge variant={
+                          courseDetailsDialog.course.statut === 'EN_ATTENTE' ? 'secondary' :
+                          courseDetailsDialog.course.statut === 'ASSIGNEE' ? 'default' :
+                          courseDetailsDialog.course.statut === 'EN_COURS' ? 'secondary' :
+                          courseDetailsDialog.course.statut === 'TERMINEE' ? 'default' : 'destructive'
+                        }>
+                          {formatStatut(courseDetailsDialog.course.statut)}
+                        </Badge>
+                      </div>
                     </div>
-                    <div className="text-lg font-bold text-blue-600">
-                      {format(new Date(courseDetailsDialog.course.dateHeure), 'HH:mm', { locale: fr })}
-                    </div>
-                  </div>
-                  <div className="space-y-1">
-                    <div className="text-sm font-medium text-muted-foreground">Statut</div>
-                    <Badge variant={
-                      courseDetailsDialog.course.statut === 'EN_ATTENTE' ? 'secondary' :
-                      courseDetailsDialog.course.statut === 'ASSIGNEE' ? 'default' :
-                      courseDetailsDialog.course.statut === 'EN_COURS' ? 'secondary' :
-                      courseDetailsDialog.course.statut === 'TERMINEE' ? 'default' : 'destructive'
-                    }>
-                      {formatStatut(courseDetailsDialog.course.statut)}
-                    </Badge>
-                  </div>
-                </div>
 
-                {/* Trajet */}
-                <div className="border rounded-lg p-4 bg-muted/50">
-                  <h4 className="font-medium text-sm mb-3 flex items-center">
-                    <MapPin className="h-4 w-4 mr-2" />
-                    Trajet
-                  </h4>
-                  <div className="space-y-2">
-                    <div className="flex items-start">
-                      <div className="w-3 h-3 rounded-full bg-green-500 mt-1 mr-3 flex-shrink-0"></div>
-                      <div>
-                        <div className="text-sm font-medium">Origine</div>
-                        <div className="text-sm text-muted-foreground">
-                          {courseDetailsDialog.course.origine}
+                    {/* Trajet */}
+                    <div className="border rounded-lg p-4 bg-muted/50">
+                      <h4 className="font-medium text-sm mb-3 flex items-center">
+                        <MapPin className="h-4 w-4 mr-2" />
+                        Trajet
+                      </h4>
+                      <div className="space-y-2">
+                        <div className="flex items-start">
+                          <div className="w-3 h-3 rounded-full bg-green-500 mt-1 mr-3 flex-shrink-0"></div>
+                          <div>
+                            <div className="text-sm font-medium">Origine</div>
+                            <div className="text-sm text-muted-foreground">
+                              {courseDetailsDialog.course.origine}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-start">
+                          <div className="w-3 h-3 rounded-full bg-red-500 mt-1 mr-3 flex-shrink-0"></div>
+                          <div>
+                            <div className="text-sm font-medium">Destination</div>
+                            <div className="text-sm text-muted-foreground">
+                              {courseDetailsDialog.course.destination}
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-start">
-                      <div className="w-3 h-3 rounded-full bg-red-500 mt-1 mr-3 flex-shrink-0"></div>
-                      <div>
-                        <div className="text-sm font-medium">Destination</div>
-                        <div className="text-sm text-muted-foreground">
-                          {courseDetailsDialog.course.destination}
-                        </div>
+
+                    {/* Client */}
+                    <div className="border rounded-lg p-4 bg-blue-50">
+                      <h4 className="font-medium text-sm mb-2 flex items-center">
+                        <User className="h-4 w-4 mr-2" />
+                        Client
+                      </h4>
+                      <div className="text-sm">
+                        {courseDetailsDialog.course.client.prenom} {courseDetailsDialog.course.client.nom.toUpperCase()}
                       </div>
                     </div>
-                  </div>
-                </div>
 
-                {/* Client */}
-                <div className="border rounded-lg p-4 bg-blue-50">
-                  <h4 className="font-medium text-sm mb-2 flex items-center">
-                    <User className="h-4 w-4 mr-2" />
-                    Client
-                  </h4>
-                  <div className="text-sm">
-                    {courseDetailsDialog.course.client.prenom} {courseDetailsDialog.course.client.nom.toUpperCase()}
-                  </div>
-                </div>
+                    {/* Prix et notes */}
+                    {(courseDetailsDialog.course.prix || courseDetailsDialog.course.notes) && (
+                      <div className="grid grid-cols-2 gap-4">
+                        {courseDetailsDialog.course.prix && (
+                          <div className="border rounded-lg p-4 bg-yellow-50">
+                            <h4 className="font-medium text-sm mb-2 flex items-center">
+                              <Euro className="h-4 w-4 mr-2" />
+                              Prix
+                            </h4>
+                            <div className="text-sm font-semibold">
+                              {courseDetailsDialog.course.prix}€
+                            </div>
+                          </div>
+                        )}
+                        {courseDetailsDialog.course.notes && (
+                          <div className="border rounded-lg p-4 bg-gray-50">
+                            <h4 className="font-medium text-sm mb-2">Notes</h4>
+                            <div className="text-sm text-muted-foreground">
+                              {courseDetailsDialog.course.notes}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
 
-                {/* Chauffeur assigné */}
-                {courseDetailsDialog.course.chauffeur && (
-                  <div className="border rounded-lg p-4 bg-green-50">
-                    <h4 className="font-medium text-sm mb-2 flex items-center">
-                      <User className="h-4 w-4 mr-2" />
-                      Chauffeur assigné
-                    </h4>
-                    <div className="text-sm">
-                      {courseDetailsDialog.course.chauffeur.prenom} {courseDetailsDialog.course.chauffeur.nom.toUpperCase()}
+                    {/* Chauffeur assigné */}
+                    {courseDetailsDialog.course.chauffeur && (
+                      <div className="border rounded-lg p-4 bg-green-50">
+                        <h4 className="font-medium text-sm mb-2 flex items-center">
+                          <User className="h-4 w-4 mr-2" />
+                          Chauffeur assigné
+                        </h4>
+                        <div className="text-sm">
+                          {courseDetailsDialog.course.chauffeur.prenom} {courseDetailsDialog.course.chauffeur.nom.toUpperCase()}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  // Vue édition
+                  <form onSubmit={async (e) => {
+                    e.preventDefault()
+                    try {
+                      const response = await fetch(`/api/courses/${courseDetailsDialog.course!.id}`, {
+                        method: 'PUT',
+                        headers: {
+                          'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                          origine: editCourseFormData.origine,
+                          destination: editCourseFormData.destination,
+                          dateHeure: new Date(editCourseFormData.dateHeure).toISOString(),
+                          prix: editCourseFormData.prix ? parseFloat(editCourseFormData.prix) : null,
+                          notes: editCourseFormData.notes || null,
+                        }),
+                      })
+
+                      if (response.ok) {
+                        await fetchData() // Recharger les données
+                        setEditingCourse(false)
+                        setCourseDetailsDialog({ isOpen: false })
+                      } else {
+                        alert('Erreur lors de la modification de la course')
+                      }
+                    } catch (error) {
+                      console.error('Erreur lors de la modification:', error)
+                      alert('Erreur lors de la modification de la course')
+                    }
+                  }} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="editDateHeure">Date et heure</Label>
+                      <Input
+                        id="editDateHeure"
+                        type="datetime-local"
+                        value={editCourseFormData.dateHeure}
+                        onChange={(e) => setEditCourseFormData({ ...editCourseFormData, dateHeure: e.target.value })}
+                        required
+                      />
                     </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="editOrigine">Origine</Label>
+                        <Input
+                          id="editOrigine"
+                          value={editCourseFormData.origine}
+                          onChange={(e) => setEditCourseFormData({ ...editCourseFormData, origine: e.target.value })}
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="editDestination">Destination</Label>
+                        <Input
+                          id="editDestination"
+                          value={editCourseFormData.destination}
+                          onChange={(e) => setEditCourseFormData({ ...editCourseFormData, destination: e.target.value })}
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="editPrix">Prix (€)</Label>
+                        <Input
+                          id="editPrix"
+                          type="number"
+                          step="0.01"
+                          value={editCourseFormData.prix}
+                          onChange={(e) => setEditCourseFormData({ ...editCourseFormData, prix: e.target.value })}
+                          placeholder="0.00"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="editNotes">Notes</Label>
+                      <Textarea
+                        id="editNotes"
+                        value={editCourseFormData.notes}
+                        onChange={(e) => setEditCourseFormData({ ...editCourseFormData, notes: e.target.value })}
+                        placeholder="Informations complémentaires..."
+                        rows={3}
+                      />
+                    </div>
+
+                    <div className="flex justify-end space-x-2">
+                      <Button type="button" variant="outline" onClick={() => setEditingCourse(false)}>
+                        Annuler
+                      </Button>
+                      <Button type="submit">
+                        Sauvegarder
+                      </Button>
+                    </div>
+                  </form>
+                )}
+
+                {!editingCourse && (
+                  <div className="flex justify-between pt-4">
+                    <div className="space-x-2">
+                      {courseDetailsDialog.course.chauffeur && (
+                        <Button 
+                          variant="outline"
+                          onClick={async () => {
+                            await handleCourseAssign(courseDetailsDialog.course!.id, null)
+                            setCourseDetailsDialog({ isOpen: false })
+                          }}
+                        >
+                          Désassigner
+                        </Button>
+                      )}
+                      {courseDetailsDialog.course.statut === 'EN_ATTENTE' && (
+                        <Button 
+                          onClick={() => {
+                            setCourseDetailsDialog({ isOpen: false })
+                            setAssignmentDialog({ isOpen: true, course: courseDetailsDialog.course })
+                          }}
+                        >
+                          Assigner
+                        </Button>
+                      )}
+                      <Button 
+                        variant="outline"
+                        onClick={() => {
+                          setEditCourseFormData({
+                            origine: courseDetailsDialog.course!.origine,
+                            destination: courseDetailsDialog.course!.destination,
+                            dateHeure: format(new Date(courseDetailsDialog.course!.dateHeure), "yyyy-MM-dd'T'HH:mm"),
+                            prix: courseDetailsDialog.course!.prix?.toString() || '',
+                            notes: courseDetailsDialog.course!.notes || ''
+                          })
+                          setEditingCourse(true)
+                        }}
+                      >
+                        <Edit className="h-4 w-4 mr-2" />
+                        Modifier
+                      </Button>
+                    </div>
+                    <Button 
+                      variant="outline" 
+                      onClick={() => {
+                        setCourseDetailsDialog({ isOpen: false })
+                        setEditingCourse(false)
+                      }}
+                    >
+                      Fermer
+                    </Button>
                   </div>
                 )}
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Modale d'assignation pour courses en attente */}
+        <Dialog open={assignmentDialog.isOpen} onOpenChange={(open) => setAssignmentDialog({ isOpen: open })}>
+          <DialogContent className="sm:max-w-[700px] max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center">
+                <User className="h-5 w-5 mr-2 text-blue-600" />
+                Assigner une course
+              </DialogTitle>
+              <DialogDescription>
+                Sélectionnez un chauffeur pour cette course en attente.
+              </DialogDescription>
+            </DialogHeader>
+            {assignmentDialog.course && (
+              <div className="space-y-4">
+                {/* Détails de la course */}
+                <div className="border rounded-lg p-4 bg-gray-50">
+                  <h4 className="font-medium text-sm mb-3 flex items-center">
+                    <Clock className="h-4 w-4 mr-2" />
+                    Course à assigner
+                  </h4>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <div className="text-sm font-medium">
+                        {format(new Date(assignmentDialog.course.dateHeure), 'HH:mm', { locale: fr })}
+                        {' - '}
+                        {format(new Date(assignmentDialog.course.dateHeure), 'dd/MM/yyyy', { locale: fr })}
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        {assignmentDialog.course.origine} → {assignmentDialog.course.destination}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium">Client</div>
+                      <div className="text-sm text-muted-foreground">
+                        {assignmentDialog.course.client.prenom} {assignmentDialog.course.client.nom.toUpperCase()}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Liste des chauffeurs disponibles */}
+                <div className="space-y-2">
+                  <h4 className="font-medium text-sm">Tous les chauffeurs</h4>
+                  <div className="space-y-2 max-h-96 overflow-y-auto">
+                    {getAvailableDriversForCourse(assignmentDialog.course).map((driver) => (
+                      <div
+                        key={driver.id}
+                        className={`border rounded-lg p-4 transition-colors ${
+                          driver.canAssign
+                            ? 'bg-green-50 border-green-200 hover:bg-green-100 cursor-pointer'
+                            : driver.statut !== 'DISPONIBLE'
+                            ? 'bg-red-50 border-red-200 opacity-75'
+                            : 'bg-gray-50 border-gray-200 opacity-75'
+                        }`}
+                        onClick={() => {
+                          if (driver.canAssign) {
+                            handleCourseAssign(assignmentDialog.course!.id, driver.id)
+                            setAssignmentDialog({ isOpen: false })
+                          }
+                        }}
+                      >
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1">
+                            <div className="flex items-center space-x-2 mb-2">
+                              <div className="font-medium text-sm">
+                                {driver.prenom} {driver.nom.toUpperCase()}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                {driver.vehicule}
+                              </div>
+                              {driver.canAssign && (
+                                <Badge variant="default" className="text-xs">
+                                  Disponible
+                                </Badge>
+                              )}
+                              {driver.statut !== 'DISPONIBLE' && (
+                                <Badge variant="destructive" className="text-xs">
+                                  {driver.statut === 'OCCUPE' ? 'Occupé' : 'Hors service'}
+                                </Badge>
+                              )}
+                              {driver.statut === 'DISPONIBLE' && !driver.isAvailable && (
+                                <Badge variant="secondary" className="text-xs">
+                                  Créneau occupé
+                                </Badge>
+                              )}
+                              {driver.statut === 'DISPONIBLE' && driver.isAvailable && !driver.isCompatible && (
+                                <Badge variant="outline" className="text-xs">
+                                  Horaire incompatible
+                                </Badge>
+                              )}
+                            </div>
+                            
+                            {/* Planning du chauffeur */}
+                            <div className="grid grid-cols-3 gap-2 text-xs">
+                              <div className="text-center">
+                                <div className="font-medium text-muted-foreground">Précédente</div>
+                                {driver.previousCourse ? (
+                                  <div className="bg-blue-100 rounded p-1 mt-1">
+                                    <div className="font-medium">
+                                      {format(new Date(driver.previousCourse.dateHeure), 'HH:mm')}
+                                    </div>
+                                    <div className="truncate">
+                                      {driver.previousCourse.origine.slice(0, 15)}...
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="text-muted-foreground mt-1">Aucune</div>
+                                )}
+                              </div>
+                              
+                              <div className="text-center">
+                                <div className="font-medium text-muted-foreground">Actuelle</div>
+                                <div className="bg-yellow-100 rounded p-1 mt-1">
+                                  <div className="font-medium">
+                                    {assignmentDialog.course && format(new Date(assignmentDialog.course.dateHeure), 'HH:mm')}
+                                  </div>
+                                  <div className="truncate">NOUVELLE</div>
+                                </div>
+                              </div>
+                              
+                              <div className="text-center">
+                                <div className="font-medium text-muted-foreground">Suivante</div>
+                                {driver.nextCourse ? (
+                                  <div className="bg-blue-100 rounded p-1 mt-1">
+                                    <div className="font-medium">
+                                      {format(new Date(driver.nextCourse.dateHeure), 'HH:mm')}
+                                    </div>
+                                    <div className="truncate">
+                                      {driver.nextCourse.origine.slice(0, 15)}...
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="text-muted-foreground mt-1">Aucune</div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    
+                    {getAvailableDriversForCourse(assignmentDialog.course).length === 0 && (
+                      <div className="text-center text-muted-foreground py-8">
+                        Aucun chauffeur trouvé
+                      </div>
+                    )}
+                  </div>
+                </div>
 
                 <div className="flex justify-end pt-4">
                   <Button 
                     variant="outline" 
-                    onClick={() => setCourseDetailsDialog({ isOpen: false })}
+                    onClick={() => setAssignmentDialog({ isOpen: false })}
                   >
                     Fermer
                   </Button>
@@ -1152,9 +1647,24 @@ export default function PlanningPage() {
         </Dialog>
 
         {/* DragOverlay pour l'aperçu pendant le drag */}
-        <DragOverlay>
-          {activeId ? (
-            <DraggableCourse course={courses.find(c => c.id === activeId)!} />
+        <DragOverlay
+          style={{
+            transformOrigin: '50% 50%',
+          }}
+          modifiers={[
+            (args) => ({
+              ...args,
+              transform: {
+                ...args.transform,
+                // Center the drag preview by offsetting it
+                x: args.transform.x - 75, // Half width of typical card
+                y: args.transform.y - 40, // Half height of typical card
+              },
+            })
+          ]}
+        >
+          {activeId && activeCourse ? (
+            <DraggableCourse course={activeCourse} />
           ) : null}
         </DragOverlay>
       </div>

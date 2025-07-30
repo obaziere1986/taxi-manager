@@ -18,6 +18,7 @@ interface CourseCardProps {
     }
     chauffeur?: {
       nom: string
+      prenom: string
     } | null
   }
 }

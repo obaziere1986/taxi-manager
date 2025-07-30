@@ -3,13 +3,29 @@ import { PrismaClient } from '@prisma/client'
 const prisma = new PrismaClient()
 
 const prénoms = [
-  'Jean', 'Pierre', 'Michel', 'André', 'Philippe', 'Alain', 'Bernard', 'Robert', 'Daniel', 'Eric',
-  'Marie', 'Françoise', 'Monique', 'Catherine', 'Isabelle', 'Sylvie', 'Christine', 'Brigitte', 'Anne', 'Martine'
+  // Prénoms français traditionnels
+  'Jean', 'Pierre', 'Marie', 'Catherine', 'Philippe', 'Isabelle', 'Alain', 'Sylvie', 'Bernard', 'Anne',
+  // Prénoms maghrébins
+  'Ahmed', 'Mohamed', 'Fatima', 'Aicha', 'Omar', 'Khadija', 'Hassan', 'Amina', 'Youssef', 'Leila',
+  // Prénoms africains
+  'Mamadou', 'Aminata', 'Ibrahim', 'Fatoumata', 'Moussa', 'Awa', 'Cheikh', 'Mariam', 'Abdoulaye', 'Aissatou',
+  // Prénoms européens/internationaux
+  'Alessandro', 'Sofia', 'Miguel', 'Carmen', 'Klaus', 'Ingrid', 'Dimitri', 'Elena', 'João', 'Ana',
+  // Prénoms asiatiques
+  'Chen', 'Li', 'Raj', 'Priya', 'Hiroshi', 'Yuki', 'David', 'Sarah', 'Kevin', 'Léa'
 ]
 
 const noms = [
-  'Martin', 'Bernard', 'Dubois', 'Thomas', 'Robert', 'Richard', 'Petit', 'Durand', 'Leroy', 'Moreau',
-  'Simon', 'Laurent', 'Lefebvre', 'Michel', 'Garcia', 'David', 'Bertrand', 'Roux', 'Vincent', 'Fournier'
+  // Noms français
+  'Martin', 'Dubois', 'Leroy', 'Moreau', 'Simon', 'Laurent', 'Lefebvre', 'Bertrand', 'Roux', 'Vincent',
+  // Noms maghrébins
+  'Benali', 'Benaissa', 'El Mansouri', 'Kaddour', 'Meziane', 'Ouali', 'Zerrouki', 'Belkacem', 'Hamidi', 'Cherif',
+  // Noms africains
+  'Diallo', 'Traoré', 'Camara', 'Koné', 'Diouf', 'Ndiaye', 'Ba', 'Sy', 'Fall', 'Kane',
+  // Noms européens/internationaux  
+  'Rossi', 'Silva', 'González', 'García', 'Schmidt', 'Müller', 'Petrov', 'Popović', 'Santos', 'Costa',
+  // Noms asiatiques
+  'Wang', 'Li', 'Patel', 'Sharma', 'Tanaka', 'Suzuki', 'Kim', 'Park', 'Nguyen', 'Tran'
 ]
 
 const véhicules = [
@@ -31,6 +47,24 @@ const adressesDestinations = [
 
 function getRandomElement<T>(array: T[]): T {
   return array[Math.floor(Math.random() * array.length)]
+}
+
+function getUniqueRandomPerson(usedCombinations: Set<string>): { prenom: string, nom: string } {
+  let attempts = 0
+  let prenom, nom, combination
+  
+  do {
+    prenom = getRandomElement(prénoms)
+    nom = getRandomElement(noms)
+    combination = `${prenom}-${nom}`
+    attempts++
+    
+    // Si on a fait trop d'essais, on accepte le doublon pour éviter une boucle infinie
+    if (attempts > 100) break
+  } while (usedCombinations.has(combination))
+  
+  usedCombinations.add(combination)
+  return { prenom, nom }
 }
 
 function getRandomPhone(): string {
@@ -70,9 +104,9 @@ async function main() {
   // Créer 10 chauffeurs
   console.log('👨‍💼 Création des chauffeurs...')
   const chauffeurs = []
+  const usedChauffeurNames = new Set<string>()
   for (let i = 0; i < 10; i++) {
-    const prenom = getRandomElement(prénoms)
-    const nom = getRandomElement(noms)
+    const { prenom, nom } = getUniqueRandomPerson(usedChauffeurNames)
     const chauffeur = await prisma.chauffeur.create({
       data: {
         prenom,
@@ -88,9 +122,9 @@ async function main() {
   // Créer 50 clients
   console.log('👥 Création des clients...')
   const clients = []
+  const usedClientNames = new Set<string>()
   for (let i = 0; i < 50; i++) {
-    const prenom = getRandomElement(prénoms)
-    const nom = getRandomElement(noms)
+    const { prenom, nom } = getUniqueRandomPerson(usedClientNames)
     const client = await prisma.client.create({
       data: {
         prenom,
