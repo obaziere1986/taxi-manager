@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { ClientCombobox } from '@/components/ui/combobox'
 import { Textarea } from '@/components/ui/textarea'
 import { PageHeader } from '@/components/page-header'
 import { Calendar, ChevronLeft, ChevronRight, Clock, User, MapPin, Plus, Zap, CheckCircle, UserPlus, Euro, Edit } from 'lucide-react'
@@ -523,7 +523,7 @@ export default function PlanningPage() {
 
     // Si la course est déjà assignée à un autre chauffeur, demander confirmation
     if (course.chauffeur.id !== chauffeurId) {
-      if (confirm(`Êtes-vous sûr de vouloir réassigner cette course à ${chauffeur.prenom} ${chauffeur.nom.toUpperCase()} ?`)) {
+      if (confirm(`Êtes-vous sûr de vouloir réassigner cette course à ${chauffeur.nom.toUpperCase()}, ${chauffeur.prenom} ?`)) {
         handleCourseAssign(courseId, chauffeurId)
       }
       return
@@ -659,7 +659,7 @@ export default function PlanningPage() {
           </div>
           <div className="flex items-center text-xs text-muted-foreground">
             <User className="h-3 w-3 mr-1" />
-            {course.client.prenom} {course.client.nom.toUpperCase()}
+            {course.client.nom.toUpperCase()}, {course.client.prenom}
           </div>
           <Badge 
             variant="secondary" 
@@ -728,7 +728,7 @@ export default function PlanningPage() {
           {course.origine} → {course.destination}
         </div>
         <div className="text-blue-700 truncate text-xs">
-          {course.client.prenom} {course.client.nom.toUpperCase()}
+          {course.client.nom.toUpperCase()}, {course.client.prenom}
         </div>
       </div>
     )
@@ -943,10 +943,6 @@ export default function PlanningPage() {
                       <Plus className="h-4 w-4 mr-2" />
                       Nouvelle course
                     </Button>
-                    <Button size="sm" variant="outline">
-                      <Zap className="h-4 w-4 mr-2" />
-                      Assignation auto
-                    </Button>
                   </div>
                 </CardTitle>
               </CardHeader>
@@ -995,7 +991,7 @@ export default function PlanningPage() {
                           >
                             <div className="space-y-1">
                               <div className="text-sm font-medium">
-                                {chauffeur.prenom} {chauffeur.nom.toUpperCase()}
+                                {chauffeur.nom.toUpperCase()}, {chauffeur.prenom}
                               </div>
                               <div className="text-xs text-muted-foreground">
                                 {chauffeur.vehicule}
@@ -1106,21 +1102,12 @@ export default function PlanningPage() {
                 <Label>Client *</Label>
                 {!showNewClientForm ? (
                   <div className="flex gap-2">
-                    <Select
+                    <ClientCombobox
+                      clients={clients}
                       value={courseFormData.clientId}
                       onValueChange={(value) => setCourseFormData({ ...courseFormData, clientId: value })}
-                    >
-                      <SelectTrigger className="flex-1">
-                        <SelectValue placeholder="Sélectionner un client" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {clients.map((client) => (
-                          <SelectItem key={client.id} value={client.id}>
-                            {client.prenom} {client.nom.toUpperCase()} - {client.telephone}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      className="flex-1"
+                    />
                     <Button
                       type="button"
                       variant="outline"
@@ -1286,7 +1273,7 @@ export default function PlanningPage() {
                         Client
                       </h4>
                       <div className="text-sm">
-                        {courseDetailsDialog.course.client.prenom} {courseDetailsDialog.course.client.nom.toUpperCase()}
+                        {courseDetailsDialog.course.client.nom.toUpperCase()}, {courseDetailsDialog.course.client.prenom}
                       </div>
                     </div>
 
@@ -1323,7 +1310,7 @@ export default function PlanningPage() {
                           Chauffeur assigné
                         </h4>
                         <div className="text-sm">
-                          {courseDetailsDialog.course.chauffeur.prenom} {courseDetailsDialog.course.chauffeur.nom.toUpperCase()}
+                          {courseDetailsDialog.course.chauffeur.nom.toUpperCase()}, {courseDetailsDialog.course.chauffeur.prenom}
                         </div>
                       </div>
                     )}
@@ -1518,7 +1505,7 @@ export default function PlanningPage() {
                     <div>
                       <div className="text-sm font-medium">Client</div>
                       <div className="text-sm text-muted-foreground">
-                        {assignmentDialog.course.client.prenom} {assignmentDialog.course.client.nom.toUpperCase()}
+                        {assignmentDialog.course.client.nom.toUpperCase()}, {assignmentDialog.course.client.prenom}
                       </div>
                     </div>
                   </div>

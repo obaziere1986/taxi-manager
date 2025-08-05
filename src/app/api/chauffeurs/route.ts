@@ -4,7 +4,10 @@ import { prisma } from '@/lib/prisma'
 export async function GET() {
   try {
     const chauffeurs = await prisma.chauffeur.findMany({
-      orderBy: { createdAt: 'desc' },
+      orderBy: [
+        { nom: 'asc' },
+        { prenom: 'asc' }
+      ],
       include: {
         _count: {
           select: { courses: true }

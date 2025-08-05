@@ -45,11 +45,6 @@ const items = [
     icon: MapPin,
   },
   {
-    title: "Chauffeurs",
-    url: "/chauffeurs",
-    icon: Car,
-  },
-  {
     title: "Paramètres",
     url: "/parametres",
     icon: Settings,

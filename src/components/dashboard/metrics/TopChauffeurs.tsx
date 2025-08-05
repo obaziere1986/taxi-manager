@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Trophy, Medal, Award, Car, Clock, DollarSign } from 'lucide-react'
+import { Trophy, Medal, Award, Car, Clock, Star } from 'lucide-react'
 
 interface ChauffeurPerformance {
   id: string
@@ -15,10 +15,9 @@ interface ChauffeurPerformance {
   coursesTerminees: number
   coursesEnCours: number
   coursesAnnulees: number
-  revenu: number
   tempsConducte: number
   tauxEfficacite: number
-  moyennePrixCourse: number
+  noteMoyenne?: number
 }
 
 export function TopChauffeurs() {
@@ -91,7 +90,7 @@ export function TopChauffeurs() {
           <Trophy className="h-5 w-5 text-yellow-500" />
           Top Chauffeurs
         </CardTitle>
-        <CardDescription>Classement des performances du mois en cours</CardDescription>
+        <CardDescription>Classement par nombre de courses terminées ce mois</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
@@ -115,7 +114,7 @@ export function TopChauffeurs() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="font-semibold text-sm">
-                      {chauffeur.prenom} {chauffeur.nom.toUpperCase()}
+                      {chauffeur.nom.toUpperCase()}, {chauffeur.prenom}
                     </p>
                     <p className="text-xs text-muted-foreground flex items-center">
                       <Car className="h-3 w-3 mr-1" />
@@ -133,12 +132,13 @@ export function TopChauffeurs() {
                     <span className="text-muted-foreground ml-1">courses</span>
                   </div>
                   <div className="flex items-center">
-                    <DollarSign className="h-3 w-3 mr-1 text-yellow-600" />
-                    <span className="font-medium">{chauffeur.revenu}€</span>
-                  </div>
-                  <div className="flex items-center">
                     <Clock className="h-3 w-3 mr-1 text-blue-600" />
                     <span className="font-medium">{chauffeur.tempsConducte}h</span>
+                  </div>
+                  <div className="flex items-center">
+                    <Star className="h-3 w-3 mr-1 text-yellow-600" />
+                    <span className="font-medium">{chauffeur.noteMoyenne ? chauffeur.noteMoyenne.toFixed(1) : 'N/A'}</span>
+                    <span className="text-muted-foreground ml-1">/5</span>
                   </div>
                 </div>
 

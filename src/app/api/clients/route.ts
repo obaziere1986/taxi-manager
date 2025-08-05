@@ -5,7 +5,10 @@ export async function GET() {
   try {
     const clients = await executeWithRetry(async (prisma) => {
       return await prisma.client.findMany({
-        orderBy: { createdAt: 'desc' },
+        orderBy: [
+          { nom: 'asc' },
+          { prenom: 'asc' }
+        ],
         include: {
           _count: {
             select: { courses: true }

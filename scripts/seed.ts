@@ -96,10 +96,15 @@ function getRandomDateTime(daysFromNow: number = 0): Date {
 async function main() {
   console.log('🌱 Début du seeding...')
 
-  // Supprimer les données existantes
+  // Supprimer les données existantes dans l'ordre correct (dépendances d'abord)
   await prisma.course.deleteMany()
-  await prisma.client.deleteMany()
+  await prisma.vehiculeAssignation.deleteMany()
+  await prisma.avisClient.deleteMany()
   await prisma.chauffeur.deleteMany()
+  await prisma.client.deleteMany()
+  await prisma.user.deleteMany()
+  await prisma.vehicule.deleteMany()
+  await prisma.parametre.deleteMany()
 
   // Créer 10 chauffeurs
   console.log('👨‍💼 Création des chauffeurs...')

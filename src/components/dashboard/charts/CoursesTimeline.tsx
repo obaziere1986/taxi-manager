@@ -12,7 +12,6 @@ interface TimelineData {
   coursesEnAttente: number
   coursesEnCours: number
   coursesAnnulees: number
-  revenu: number
   chauffeurs: number
 }
 
@@ -43,12 +42,9 @@ export function CoursesTimeline() {
           <p className="font-medium">{`${label}`}</p>
           {payload.map((entry: any, index: number) => (
             <p key={index} style={{ color: entry.color }} className="text-sm">
-              {`${entry.dataKey === 'revenu' ? 'Revenus' : 
-                 entry.dataKey === 'courses' ? 'Total courses' :
+              {`${entry.dataKey === 'courses' ? 'Total courses' :
                  entry.dataKey === 'coursesTerminees' ? 'Terminées' :
-                 entry.dataKey === 'chauffeurs' ? 'Chauffeurs actifs' : entry.dataKey}: ${
-                entry.dataKey === 'revenu' ? entry.value + '€' : entry.value
-              }`}
+                 entry.dataKey === 'chauffeurs' ? 'Chauffeurs actifs' : entry.dataKey}: ${entry.value}`}
             </p>
           ))}
         </div>
@@ -77,7 +73,7 @@ export function CoursesTimeline() {
     <Card>
       <CardHeader>
         <CardTitle>Évolution des courses</CardTitle>
-        <CardDescription>Activité et revenus des 7 derniers jours</CardDescription>
+        <CardDescription>Évolution des courses terminées sur les 7 derniers jours</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="h-[300px]">
@@ -110,14 +106,6 @@ export function CoursesTimeline() {
                 strokeWidth={2}
                 name="Terminées"
                 dot={{ fill: 'hsl(142 76% 36%)' }}
-              />
-              <Line 
-                type="monotone" 
-                dataKey="revenu" 
-                stroke="hsl(45 93% 47%)" 
-                strokeWidth={2}
-                name="Revenus (€)"
-                dot={{ fill: 'hsl(45 93% 47%)' }}
               />
             </LineChart>
           </ResponsiveContainer>

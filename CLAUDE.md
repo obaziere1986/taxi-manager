@@ -20,8 +20,16 @@ pnpm exec prisma db push      # Appliquer le schéma
 pnpm exec prisma generate     # Générer le client Prisma
 pnpm exec prisma studio       # Interface graphique (http://localhost:5555)
 pnpm run db:seed              # Peupler avec des données de test
-pnpm run db:reset             # Reset complet + seeding
+pnpm run db:reset             # Reset rapide + seeding
+pnpm run db:reset-full        # Reset complet + seeding véhicules
+pnpm run db:check             # Vérifier la stabilité de la DB
 ```
+
+**🔧 Solution aux problèmes de stabilité SQLite :**
+- **Chemin fixe** : `DATABASE_URL="file:prisma/dev.db"`
+- **Connexion robuste** : Client Prisma avec retry automatique
+- **Vérification automatique** : Fonction `ensureDatabaseConnection()`
+- **Scripts de maintenance** : Reset complet et vérification de stabilité
 
 ## 🏗️ Architecture de l'Application
 

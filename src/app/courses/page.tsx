@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { ClientCombobox, ChauffeurCombobox } from '@/components/ui/combobox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
@@ -268,40 +269,21 @@ export default function CoursesPage() {
 
               <div className="space-y-2">
                 <Label htmlFor="clientId">Client *</Label>
-                <Select
+                <ClientCombobox
+                  clients={clients}
                   value={formData.clientId}
                   onValueChange={(value) => setFormData({ ...formData, clientId: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Sélectionner un client" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {clients.map((client) => (
-                      <SelectItem key={client.id} value={client.id}>
-                        {client.prenom} {client.nom.toUpperCase()}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                />
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="chauffeurId">Chauffeur</Label>
-                <Select
+                <ChauffeurCombobox
+                  chauffeurs={chauffeurs}
                   value={formData.chauffeurId}
                   onValueChange={(value) => setFormData({ ...formData, chauffeurId: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Assigner un chauffeur (optionnel)" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {chauffeurs.map((chauffeur) => (
-                      <SelectItem key={chauffeur.id} value={chauffeur.id}>
-                        {chauffeur.prenom} {chauffeur.nom.toUpperCase()} - {chauffeur.vehicule}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  placeholder="Assigner un chauffeur (optionnel)"
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -397,14 +379,14 @@ export default function CoursesPage() {
                   <TableCell>
                     <div className="flex items-center text-sm">
                       <User className="mr-2 h-3 w-3" />
-                      {course.client.prenom} {course.client.nom.toUpperCase()}
+                      {course.client.nom.toUpperCase()}, {course.client.prenom}
                     </div>
                   </TableCell>
                   <TableCell>
                     {course.chauffeur ? (
                       <div className="flex items-center text-sm">
                         <Car className="mr-2 h-3 w-3" />
-                        {course.chauffeur.prenom} {course.chauffeur.nom.toUpperCase()}
+                        {course.chauffeur.nom.toUpperCase()}, {course.chauffeur.prenom}
                       </div>
                     ) : (
                       <span className="text-muted-foreground">Non assigné</span>

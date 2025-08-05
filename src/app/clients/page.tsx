@@ -718,7 +718,7 @@ export default function ClientsPage() {
                                       {course.chauffeur && (
                                         <div className="flex items-center gap-1">
                                           <Car className="h-3 w-3 flex-shrink-0" />
-                                          <span>{course.chauffeur.prenom} {course.chauffeur.nom.toUpperCase()}</span>
+                                          <span>{course.chauffeur.nom.toUpperCase()}, {course.chauffeur.prenom}</span>
                                         </div>
                                       )}
                                     </div>

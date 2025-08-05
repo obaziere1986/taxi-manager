@@ -8,8 +8,8 @@ import { Car, Calendar, Users, MapPin } from "lucide-react"
 import { startOfDay, endOfDay } from 'date-fns'
 import { CoursesTimeline } from '@/components/dashboard/charts/CoursesTimeline'
 import { ChauffeurPerformance } from '@/components/dashboard/charts/ChauffeurPerformance'
-import { RevenueChart } from '@/components/dashboard/charts/RevenueChart'
 import { TopChauffeurs } from '@/components/dashboard/metrics/TopChauffeurs'
+import { VehiculeAlerts } from '@/components/dashboard/metrics/VehiculeAlerts'
 
 interface DashboardStats {
   coursesToday: number
@@ -169,8 +169,6 @@ export default function Home() {
           </Card>
         </div>
 
-        {/* Métriques de revenus */}
-        <RevenueChart />
 
         {/* Graphiques principaux */}
         <div className="grid gap-6 lg:grid-cols-2">
@@ -179,9 +177,12 @@ export default function Home() {
         </div>
 
         {/* Section détaillée */}
-        <div className="grid gap-6 lg:grid-cols-3">
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-2">
           {/* Top Chauffeurs */}
           <TopChauffeurs />
+          
+          {/* Alertes véhicules */}
+          <VehiculeAlerts />
           
           {/* Courses récentes */}
           <Card>
@@ -198,7 +199,7 @@ export default function Home() {
                       <div className="flex-1 space-y-1">
                         <p className="text-sm font-medium">{course.origine} → {course.destination}</p>
                         <p className="text-xs text-muted-foreground">
-                          {course.client.prenom} {course.client.nom.toUpperCase()} - {new Date(course.dateHeure).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                          {course.client.nom.toUpperCase()}, {course.client.prenom} - {new Date(course.dateHeure).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
                         </p>
                       </div>
                       <div className="text-sm font-medium">{course.prix ? `${course.prix}€` : '-'}</div>
@@ -224,7 +225,7 @@ export default function Home() {
                     <div key={chauffeur.id} className="flex items-center space-x-4">
                       <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                       <div className="flex-1 space-y-1">
-                        <p className="text-sm font-medium">{chauffeur.prenom} {chauffeur.nom.toUpperCase()}</p>
+                        <p className="text-sm font-medium">{chauffeur.nom.toUpperCase()}, {chauffeur.prenom}</p>
                         <p className="text-xs text-muted-foreground">{chauffeur.vehicule} - Disponible</p>
                       </div>
                     </div>
