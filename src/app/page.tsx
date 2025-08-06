@@ -8,7 +8,6 @@ import { Car, Calendar, Users, MapPin } from "lucide-react"
 import { startOfDay, endOfDay } from 'date-fns'
 import { CoursesTimeline } from '@/components/dashboard/charts/CoursesTimeline'
 import { ChauffeurPerformance } from '@/components/dashboard/charts/ChauffeurPerformance'
-import { TopChauffeurs } from '@/components/dashboard/metrics/TopChauffeurs'
 import { VehiculeAlerts } from '@/components/dashboard/metrics/VehiculeAlerts'
 
 interface DashboardStats {
@@ -177,10 +176,8 @@ export default function Home() {
         </div>
 
         {/* Section détaillée */}
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-2">
-          {/* Top Chauffeurs */}
-          <TopChauffeurs />
-          
+        <div className="grid gap-6 md:grid-cols-3 lg:grid-cols-3">
+                    
           {/* Alertes véhicules */}
           <VehiculeAlerts />
           

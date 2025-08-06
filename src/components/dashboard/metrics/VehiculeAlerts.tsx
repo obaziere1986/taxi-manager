@@ -99,9 +99,8 @@ export function VehiculeAlerts() {
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5" />
+          <div className="w-full">
+            <CardTitle className="flex items-center justify-between gap-2">
               Alertes véhicules
               {alertesCritiques > 0 && (
                 <Badge variant="destructive" className="animate-pulse">
@@ -116,12 +115,6 @@ export function VehiculeAlerts() {
               }
             </CardDescription>
           </div>
-          <Link href="/parametres?tab=vehicules">
-            <Button variant="outline" size="sm">
-              <ExternalLink className="h-4 w-4 mr-2" />
-              Voir tout
-            </Button>
-          </Link>
         </div>
       </CardHeader>
       <CardContent>
@@ -134,22 +127,16 @@ export function VehiculeAlerts() {
 
               return (
                 <div key={vehicule.id} className="flex items-center space-x-4 p-3 rounded-lg border bg-card">
-                  <div className="flex-shrink-0">
-                    <Car className={`h-4 w-4 ${
-                      alerteCritique ? 'text-red-500 animate-pulse' :
-                      alerteUrgente ? 'text-red-500' :
-                      'text-orange-500'
-                    }`} />
-                  </div>
-                  
                   <div className="flex-1 space-y-1">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center justify-between gap-2">
                       <p className="text-sm font-medium">
                         {vehicule.marque} {vehicule.modele}
                       </p>
                       <span className="text-xs text-muted-foreground">
                         {vehicule.immatriculation}
                       </span>
+                    </div>
+                    <div className="flex flex-wrap gap-2 mt-1">
                       {vehicule.alerts.map((alert, index) => (
                         <Badge 
                           key={index}
@@ -165,7 +152,7 @@ export function VehiculeAlerts() {
                     
                     {vehicule.chauffeurs && vehicule.chauffeurs.length > 0 && (
                       <p className="text-xs text-muted-foreground">
-                        Assigné à: {vehicule.chauffeurs[0].nom.toUpperCase()}, {vehicule.chauffeurs[0].prenom}
+                        Assigné à : {vehicule.chauffeurs[0].nom.toUpperCase()} {vehicule.chauffeurs[0].prenom}
                       </p>
                     )}
                   </div>

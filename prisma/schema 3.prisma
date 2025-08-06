@@ -40,8 +40,7 @@ model Chauffeur {
   vehiculeId String?
   vehiculeObj Vehicule? @relation(fields: [vehiculeId], references: [id])
   
-  courses      Course[]
-  assignations VehiculeAssignation[]
+  courses   Course[]
 }
 
 model Course {
@@ -95,8 +94,7 @@ model User {
   createdAt DateTime        @default(now())
   updatedAt DateTime        @updatedAt
   
-  chauffeur    Chauffeur?
-  assignations VehiculeAssignation[]
+  chauffeur Chauffeur?
 }
 
 model Vehicule {
@@ -123,26 +121,6 @@ model Vehicule {
   updatedAt      DateTime @updatedAt
   
   chauffeurs     Chauffeur[]
-  assignations   VehiculeAssignation[]
-}
-
-model VehiculeAssignation {
-  id           String    @id @default(cuid())
-  dateDebut    DateTime  @default(now())
-  dateFin      DateTime?
-  actif        Boolean   @default(true)
-  notes        String?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  
-  vehiculeId   String
-  vehicule     Vehicule  @relation(fields: [vehiculeId], references: [id])
-  
-  chauffeurId  String?
-  chauffeur    Chauffeur? @relation(fields: [chauffeurId], references: [id])
-  
-  userId       String?
-  user         User?     @relation(fields: [userId], references: [id])
 }
 
 model AvisClient {

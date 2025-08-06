@@ -6,6 +6,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Switch } from "@/components/ui/switch"
+import { Separator } from "@/components/ui/separator"
 import { 
   Car, 
   Users, 
@@ -29,6 +35,7 @@ import { VehiculeModal } from '@/components/vehicules/VehiculeModal'
 import { DeleteVehiculeModal } from '@/components/vehicules/DeleteVehiculeModal'
 import { UserModal } from '@/components/effectifs/UserModal'
 import { DeleteUserModal } from '@/components/effectifs/DeleteUserModal'
+import { VehiculeAssignationModal } from '@/components/effectifs/VehiculeAssignationModal'
 import { getVehiculeAlerts, getAlertBadgeVariant } from '@/lib/vehicule-alerts'
 
 interface Vehicule {
@@ -60,10 +67,16 @@ interface VehiculeAssignation {
     modele: string
     immatriculation: string
   }
-  chauffeur: {
+  chauffeur?: {
     id: string
     nom: string
     prenom: string
+  }
+  user?: {
+    id: string
+    nom: string
+    prenom: string
+    role: string
   }
 }
 
@@ -79,14 +92,42 @@ interface User {
   updatedAt: string
 }
 
+interface Chauffeur {
+  id: string
+  nom: string
+  prenom: string
+  telephone?: string
+  vehicule?: string
+  statut: 'DISPONIBLE' | 'OCCUPE' | 'HORS_SERVICE'
+  createdAt: string
+}
+
+interface CombinedUser {
+  id: string
+  nom: string
+  prenom: string
+  telephone?: string
+  email?: string
+  role: 'CHAUFFEUR' | 'PLANNEUR' | 'ADMIN'
+  statut?: 'DISPONIBLE' | 'OCCUPE' | 'HORS_SERVICE'
+  vehicule?: string
+  vehiculeId?: string
+  actif: boolean
+  createdAt: string
+  source: 'users' | 'chauffeurs'
+}
+
 export default function ParametresPage() {
   const [activeTab, setActiveTab] = useState("vehicules")
   const [vehicules, setVehicules] = useState<Vehicule[]>([])
   const [assignations, setAssignations] = useState<VehiculeAssignation[]>([])
   const [users, setUsers] = useState<User[]>([])
+  const [chauffeurs, setChauffeurs] = useState<Chauffeur[]>([])
+  const [combinedUsers, setCombinedUsers] = useState<CombinedUser[]>([])
   const [loading, setLoading] = useState(true)
   const [loadingAssignations, setLoadingAssignations] = useState(false)
   const [loadingUsers, setLoadingUsers] = useState(false)
+  const [loadingChauffeurs, setLoadingChauffeurs] = useState(false)
   
   // États des modales véhicules
   const [vehiculeModal, setVehiculeModal] = useState<{
@@ -112,6 +153,13 @@ export default function ParametresPage() {
     user?: User | null
   }>({ isOpen: false, user: null })
 
+  // États de la modale d'assignation véhicule
+  const [assignationModal, setAssignationModal] = useState<{
+    isOpen: boolean
+    chauffeur?: any | null
+    user?: any | null
+  }>({ isOpen: false, chauffeur: null, user: null })
+
   // Charger les données selon l'onglet actif
   useEffect(() => {
     if (activeTab === 'vehicules') {
@@ -119,6 +167,8 @@ export default function ParametresPage() {
       fetchAssignations()
     } else if (activeTab === 'effectifs') {
       fetchUsers()
+      fetchChauffeurs()
+      fetchVehicules() // Nécessaire pour les assignations
     }
   }, [activeTab])
 
@@ -138,11 +188,19 @@ export default function ParametresPage() {
   const fetchAssignations = async () => {
     try {
       setLoadingAssignations(true)
-      const response = await fetch('/api/vehicules/assignations')
+      const response = await fetch('/api/vehicules/assignations/robust')
       const data = await response.json()
-      setAssignations(data)
+      
+      // Vérifier que data est un tableau
+      if (Array.isArray(data)) {
+        setAssignations(data)
+      } else {
+        console.error('Les données d\'assignations ne sont pas un tableau:', data)
+        setAssignations([])
+      }
     } catch (error) {
       console.error('Erreur lors du chargement des assignations:', error)
+      setAssignations([])
     } finally {
       setLoadingAssignations(false)
     }
@@ -160,6 +218,49 @@ export default function ParametresPage() {
       setLoadingUsers(false)
     }
   }
+
+  const fetchChauffeurs = async () => {
+    try {
+      setLoadingChauffeurs(true)
+      const response = await fetch('/api/chauffeurs')
+      const data = await response.json()
+      setChauffeurs(data)
+    } catch (error) {
+      console.error('Erreur lors du chargement des chauffeurs:', error)
+    } finally {
+      setLoadingChauffeurs(false)
+    }
+  }
+
+  // Fusionner les utilisateurs et chauffeurs
+  useEffect(() => {
+    const combined: CombinedUser[] = [
+      // Utilisateurs système
+      ...users.map(user => ({
+        ...user,
+        role: user.role,
+        source: 'users' as const
+      })),
+      // Chauffeurs
+      ...chauffeurs.map(chauffeur => ({
+        ...chauffeur,
+        role: 'CHAUFFEUR' as const,
+        email: undefined,
+        actif: chauffeur.statut !== 'HORS_SERVICE',
+        source: 'chauffeurs' as const
+      }))
+    ]
+    
+    // Trier par rôle puis nom
+    combined.sort((a, b) => {
+      const roleOrder = { 'ADMIN': 1, 'PLANNEUR': 2, 'CHAUFFEUR': 3 }
+      const roleCompare = roleOrder[a.role] - roleOrder[b.role]
+      if (roleCompare !== 0) return roleCompare
+      return (a.nom + a.prenom).localeCompare(b.nom + b.prenom)
+    })
+    
+    setCombinedUsers(combined)
+  }, [users, chauffeurs])
 
   const handleSaveVehicule = async (vehiculeData: Vehicule) => {
     try {
@@ -253,19 +354,37 @@ export default function ParametresPage() {
     }
   }
 
+  const handleAssignVehicule = async (assignationData: any) => {
+    try {
+      const response = await fetch('/api/vehicules/assignations/assign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(assignationData)
+      })
+      
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Erreur lors de l\'assignation')
+      }
+      
+      // Recharger les données
+      await fetchChauffeurs()
+      await fetchAssignations()
+      setAssignationModal({ isOpen: false, chauffeur: null })
+    } catch (error) {
+      console.error('Erreur:', error)
+      throw error
+    }
+  }
+
 
   return (
     <div className="flex-1 flex flex-col h-full">
-      <PageHeader title="Paramètres">
-        <Button>
-          <Settings className="h-4 w-4 mr-2" />
-          Sauvegarder
-        </Button>
-      </PageHeader>
+      <PageHeader title="Paramètres" />
 
       <div className="flex-1 p-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="vehicules" className="flex items-center gap-2">
               <Car className="h-4 w-4" />
               Véhicules
@@ -277,10 +396,6 @@ export default function ParametresPage() {
             <TabsTrigger value="preferences" className="flex items-center gap-2">
               <Settings className="h-4 w-4" />
               Préférences
-            </TabsTrigger>
-            <TabsTrigger value="communications" className="flex items-center gap-2">
-              <MessageSquare className="h-4 w-4" />
-              Communications
             </TabsTrigger>
           </TabsList>
 
@@ -421,7 +536,7 @@ export default function ParametresPage() {
                   Historique des assignations
                 </CardTitle>
                 <CardDescription>
-                  Suivi des assignations véhicule-chauffeur
+                  Suivi des assignations véhicule-personne (chauffeurs, admins, planneurs)
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -436,7 +551,7 @@ export default function ParametresPage() {
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {assignations.length === 0 ? (
+                    {!Array.isArray(assignations) || assignations.length === 0 ? (
                       <div className="text-center py-8 text-muted-foreground">
                         <History className="h-12 w-12 mx-auto mb-4 opacity-20" />
                         <p>Aucune assignation enregistrée</p>
@@ -462,8 +577,14 @@ export default function ParametresPage() {
                                 <div className="flex items-center gap-2">
                                   <User className="h-4 w-4 text-green-500" />
                                   <span className="font-medium">
-                                    {assignation.chauffeur.nom.toUpperCase()}, {assignation.chauffeur.prenom}
+                                    {assignation.chauffeur ? 
+                                      `${assignation.chauffeur.nom.toUpperCase()}, ${assignation.chauffeur.prenom}` :
+                                      `${assignation.user.nom.toUpperCase()}, ${assignation.user.prenom}`
+                                    }
                                   </span>
+                                  <Badge variant="outline" className="ml-2">
+                                    {assignation.chauffeur ? 'Chauffeur' : assignation.user?.role}
+                                  </Badge>
                                 </div>
                                 
                                 <Badge variant={assignation.actif ? "default" : "secondary"}>
@@ -514,17 +635,17 @@ export default function ParametresPage() {
                       Gestion des effectifs
                     </CardTitle>
                     <CardDescription>
-                      Gérer les utilisateurs et leurs rôles dans l'application
+                      Gérer tous les utilisateurs : admins, planneurs et chauffeurs
                     </CardDescription>
                   </div>
                   <Button onClick={() => setUserModal({ isOpen: true, mode: 'create', user: null })}>
                     <Plus className="h-4 w-4 mr-2" />
-                    Nouvel utilisateur
+                    Nouvelle personne
                   </Button>
                 </div>
               </CardHeader>
               <CardContent>
-                {loadingUsers ? (
+                {(loadingUsers || loadingChauffeurs) ? (
                   <div className="space-y-4">
                     {[1, 2, 3].map(i => (
                       <div key={i} className="border rounded-lg p-4 animate-pulse">
@@ -535,13 +656,13 @@ export default function ParametresPage() {
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {users.length === 0 ? (
+                    {combinedUsers.length === 0 ? (
                       <div className="text-center py-8 text-muted-foreground">
                         <Users className="h-12 w-12 mx-auto mb-4 opacity-20" />
-                        <p>Aucun utilisateur enregistré</p>
+                        <p>Aucune personne enregistrée</p>
                       </div>
                     ) : (
-                      users.map((user) => {
+                      combinedUsers.map((person) => {
                         const getRoleIcon = (role: string) => {
                           switch (role) {
                             case 'ADMIN': return <Shield className="h-4 w-4 text-red-500" />
@@ -560,47 +681,79 @@ export default function ParametresPage() {
                           }
                         }
 
+                        const getStatutBadge = (statut?: string) => {
+                          if (!statut) return null
+                          switch (statut) {
+                            case 'DISPONIBLE': return <Badge variant="default" className="bg-green-100 text-green-800 ml-2">Disponible</Badge>
+                            case 'OCCUPE': return <Badge variant="secondary" className="bg-orange-100 text-orange-800 ml-2">Occupé</Badge>
+                            case 'HORS_SERVICE': return <Badge variant="outline" className="bg-red-100 text-red-800 ml-2">Hors service</Badge>
+                            default: return null
+                          }
+                        }
+
                         return (
-                          <div key={user.id} className="border rounded-lg p-4">
+                          <div key={`${person.source}-${person.id}`} className="border rounded-lg p-4">
                             <div className="flex justify-between items-start">
                               <div className="space-y-2">
                                 <div className="flex items-center gap-2">
-                                  {getRoleIcon(user.role)}
+                                  {getRoleIcon(person.role)}
                                   <h3 className="font-semibold">
-                                    {user.nom}, {user.prenom}
+                                    {person.nom.toUpperCase()}, {person.prenom}
                                   </h3>
-                                  {getRoleBadge(user.role)}
-                                  {!user.actif && <Badge variant="outline">Inactif</Badge>}
+                                  {getRoleBadge(person.role)}
+                                  {getStatutBadge(person.statut)}
+                                  {!person.actif && <Badge variant="outline" className="ml-2">Inactif</Badge>}
                                 </div>
                                 <div className="space-y-1">
                                   <p className="text-sm text-muted-foreground">
-                                    {user.email}
-                                    {user.telephone && ` • ${user.telephone}`}
+                                    {person.email && `📧 ${person.email}`}
+                                    {person.telephone && `${person.email ? ' • ' : ''}📞 ${person.telephone}`}
+                                    {person.vehicule && ` • 🚗 ${person.vehicule}`}
                                   </p>
                                   <p className="text-xs text-muted-foreground">
-                                    Créé le {new Date(user.createdAt).toLocaleDateString('fr-FR')}
+                                    {person.role === 'CHAUFFEUR' && person.source === 'chauffeurs' ? 'Chauffeur' : 'Utilisateur'} depuis le {new Date(person.createdAt).toLocaleDateString('fr-FR')}
                                   </p>
                                 </div>
                               </div>
                               <div className="flex gap-2">
+                                {/* Tous les utilisateurs peuvent avoir un véhicule assigné */}
                                 <Button 
                                   variant="outline" 
                                   size="sm"
-                                  onClick={() => setUserModal({ 
+                                  title="Assigner un véhicule"
+                                  onClick={() => setAssignationModal({ 
                                     isOpen: true, 
-                                    mode: 'edit', 
-                                    user 
+                                    chauffeur: person.source === 'chauffeurs' ? chauffeurs.find(c => c.id === person.id) : null,
+                                    user: person.source === 'users' ? users.find(u => u.id === person.id) : null
                                   })}
+                                >
+                                  <Car className="h-4 w-4" />
+                                </Button>
+                                <Button 
+                                  variant="outline" 
+                                  size="sm"
+                                  onClick={() => {
+                                    if (person.source === 'users') {
+                                      const user = users.find(u => u.id === person.id)
+                                      setUserModal({ isOpen: true, mode: 'edit', user })
+                                    } else {
+                                      // TODO: Modal chauffeur
+                                    }
+                                  }}
                                 >
                                   <Edit className="h-4 w-4" />
                                 </Button>
                                 <Button 
                                   variant="outline" 
                                   size="sm"
-                                  onClick={() => setDeleteUserModal({ 
-                                    isOpen: true, 
-                                    user 
-                                  })}
+                                  onClick={() => {
+                                    if (person.source === 'users') {
+                                      const user = users.find(u => u.id === person.id)
+                                      setDeleteUserModal({ isOpen: true, user })
+                                    } else {
+                                      // TODO: Modal suppression chauffeur
+                                    }
+                                  }}
                                 >
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
@@ -618,90 +771,262 @@ export default function ParametresPage() {
 
           {/* Section Préférences */}
           <TabsContent value="preferences" className="space-y-6">
-            <div className="grid gap-6 md:grid-cols-2">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Settings className="h-5 w-5" />
-                    Paramètres généraux
-                  </CardTitle>
-                  <CardDescription>
-                    Configuration de base de l'application
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <p className="font-medium">Nom de la société</p>
-                      <p className="text-sm text-muted-foreground">Taxis Excellence</p>
+            {/* Entreprise & Identité */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Settings className="h-5 w-5" />
+                  Informations de l'entreprise
+                </CardTitle>
+                <CardDescription>
+                  Identité et coordonnées de votre société de taxi
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Nom de la société</Label>
+                    <Input defaultValue="Taxis Excellence" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>SIRET</Label>
+                    <Input placeholder="123 456 789 01234" />
+                  </div>
+                </div>
+                
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Téléphone principal</Label>
+                    <Input placeholder="01.23.45.67.89" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Email de contact</Label>
+                    <Input type="email" placeholder="contact@taxi-excellence.fr" />
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label>Adresse</Label>
+                  <Textarea 
+                    placeholder="123 Rue de la République
+75001 Paris" 
+                    rows={3}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Configuration Opérationnelle */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Car className="h-5 w-5" />
+                  Configuration opérationnelle
+                </CardTitle>
+                <CardDescription>
+                  Paramètres de fonctionnement quotidien
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Horaires */}
+                <div className="space-y-4">
+                  <h4 className="font-medium">Horaires de service</h4>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>Ouverture</Label>
+                      <Input type="time" defaultValue="06:00" />
                     </div>
-                    <Button variant="outline" size="sm">
-                      <Edit className="h-4 w-4" />
-                    </Button>
+                    <div className="space-y-2">
+                      <Label>Fermeture</Label>
+                      <Input type="time" defaultValue="23:00" />
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Switch id="service24h" />
+                    <Label htmlFor="service24h">Service 24h/24</Label>
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Tarification */}
+                <div className="space-y-4">
+                  <h4 className="font-medium">Tarification</h4>
+                  <div className="grid gap-4 md:grid-cols-3">
+                    <div className="space-y-2">
+                      <Label>Prise en charge (€)</Label>
+                      <Input type="number" step="0.50" defaultValue="4.20" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Prix/km jour (€)</Label>
+                      <Input type="number" step="0.01" defaultValue="1.15" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Prix/km nuit (€)</Label>
+                      <Input type="number" step="0.01" defaultValue="1.50" />
+                    </div>
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>Heure début tarif nuit</Label>
+                      <Input type="time" defaultValue="20:00" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Heure fin tarif nuit</Label>
+                      <Input type="time" defaultValue="07:00" />
+                    </div>
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Temps & Distances */}
+                <div className="space-y-4">
+                  <h4 className="font-medium">Temps & distances</h4>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>Durée moyenne course (min)</Label>
+                      <Input type="number" defaultValue="45" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Distance maximale (km)</Label>
+                      <Input type="number" defaultValue="100" />
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Switch id="confirmationAuto" defaultChecked />
+                    <Label htmlFor="confirmationAuto">Confirmation automatique des courses</Label>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Notifications & Communications */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Phone className="h-5 w-5" />
+                  Notifications & Communications
+                </CardTitle>
+                <CardDescription>
+                  Configuration des alertes et communications automatiques
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* SMS */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="font-medium">Notifications SMS</h4>
+                      <p className="text-sm text-muted-foreground">Envoyer des SMS automatiques aux clients</p>
+                    </div>
+                    <Switch id="smsEnabled" />
                   </div>
                   
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <p className="font-medium">Fuseau horaire</p>
-                      <p className="text-sm text-muted-foreground">Europe/Paris (UTC+1)</p>
+                  <div className="ml-6 space-y-3">
+                    <div className="flex items-center space-x-2">
+                      <Switch id="smsConfirmation" />
+                      <Label htmlFor="smsConfirmation">Confirmation de réservation</Label>
                     </div>
-                    <Button variant="outline" size="sm">
-                      <Edit className="h-4 w-4" />
-                    </Button>
+                    <div className="flex items-center space-x-2">
+                      <Switch id="smsArrivee" />
+                      <Label htmlFor="smsArrivee">Arrivée du chauffeur (5 min avant)</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Switch id="smsFacture" />
+                      <Label htmlFor="smsFacture">Récapitulatif fin de course</Label>
+                    </div>
                   </div>
+                </div>
 
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <p className="font-medium">Devise</p>
-                      <p className="text-sm text-muted-foreground">Euro (€)</p>
-                    </div>
-                    <Button variant="outline" size="sm">
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
+                <Separator />
 
-              <Card>
-                <CardHeader>
-                  <CardTitle>Planning & Courses</CardTitle>
-                  <CardDescription>
-                    Configuration du système de planning
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex justify-between items-center">
+                {/* Email */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
                     <div>
-                      <p className="font-medium">Horaires d'ouverture</p>
-                      <p className="text-sm text-muted-foreground">7h00 - 22h00</p>
+                      <h4 className="font-medium">Notifications Email</h4>
+                      <p className="text-sm text-muted-foreground">Rapports et notifications par email</p>
                     </div>
-                    <Button variant="outline" size="sm">
-                      <Edit className="h-4 w-4" />
-                    </Button>
+                    <Switch id="emailEnabled" />
                   </div>
                   
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <p className="font-medium">Durée moyenne d'une course</p>
-                      <p className="text-sm text-muted-foreground">60 minutes</p>
+                  <div className="ml-6 space-y-3">
+                    <div className="flex items-center space-x-2">
+                      <Switch id="emailRapportQuotidien" />
+                      <Label htmlFor="emailRapportQuotidien">Rapport quotidien d'activité</Label>
                     </div>
-                    <Button variant="outline" size="sm">
-                      <Edit className="h-4 w-4" />
-                    </Button>
+                    <div className="flex items-center space-x-2">
+                      <Switch id="emailAlertes" />
+                      <Label htmlFor="emailAlertes">Alertes véhicules (entretien, contrôle technique)</Label>
+                    </div>
                   </div>
+                </div>
+              </CardContent>
+            </Card>
 
-                  <div className="flex justify-between items-center">
+            {/* Système & Sauvegardes */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5" />
+                  Système & Données
+                </CardTitle>
+                <CardDescription>
+                  Configuration système et gestion des données
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Fuseau horaire</Label>
+                    <Select defaultValue="Europe/Paris">
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Europe/Paris">Europe/Paris (UTC+1)</SelectItem>
+                        <SelectItem value="Europe/London">Europe/London (UTC+0)</SelectItem>
+                        <SelectItem value="America/New_York">America/New_York (UTC-5)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Devise</Label>
+                    <Select defaultValue="EUR">
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="EUR">Euro (€)</SelectItem>
+                        <SelectItem value="USD">Dollar ($)</SelectItem>
+                        <SelectItem value="GBP">Livre (£)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
                     <div>
-                      <p className="font-medium">Confirmation automatique</p>
-                      <p className="text-sm text-muted-foreground">Activée</p>
+                      <p className="font-medium">Sauvegarde automatique</p>
+                      <p className="text-sm text-muted-foreground">Sauvegarde quotidienne des données</p>
+                    </div>
+                    <Switch id="autoBackup" defaultChecked />
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium">Dernière sauvegarde</p>
+                      <p className="text-sm text-muted-foreground">Aujourd'hui à 03:00</p>
                     </div>
                     <Button variant="outline" size="sm">
-                      <Edit className="h-4 w-4" />
+                      Sauvegarder maintenant
                     </Button>
                   </div>
-                </CardContent>
-              </Card>
-            </div>
+                </div>
+              </CardContent>
+            </Card>
           </TabsContent>
 
           {/* Section Communications */}
@@ -860,6 +1185,16 @@ export default function ParametresPage() {
         onClose={() => setDeleteUserModal({ isOpen: false, user: null })}
         onDelete={handleDeleteUser}
         user={deleteUserModal.user}
+      />
+      
+      {/* Modale assignation véhicule */}
+      <VehiculeAssignationModal
+        isOpen={assignationModal.isOpen}
+        onClose={() => setAssignationModal({ isOpen: false, chauffeur: null, user: null })}
+        onAssign={handleAssignVehicule}
+        chauffeur={assignationModal.chauffeur}
+        user={assignationModal.user}
+        vehicules={vehicules}
       />
     </div>
   )
