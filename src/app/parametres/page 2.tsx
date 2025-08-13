@@ -37,6 +37,8 @@ import { VehiculeModal } from '@/components/vehicules/VehiculeModal'
 import { DeleteVehiculeModal } from '@/components/vehicules/DeleteVehiculeModal'
 import { UserModal } from '@/components/effectifs/UserModal'
 import { DeleteUserModal } from '@/components/effectifs/DeleteUserModal'
+import { ChauffeurModal } from '@/components/effectifs/ChauffeurModal'
+import { DeleteChauffeurModal } from '@/components/effectifs/DeleteChauffeurModal'
 import { VehiculeAssignationModal } from '@/components/effectifs/VehiculeAssignationModal'
 import { VehicleAssignModal } from '@/components/vehicules/VehicleAssignModal'
 import { getVehiculeAlerts, getAlertBadgeVariant } from '@/lib/vehicule-alerts'
@@ -55,13 +57,6 @@ interface Vehicule {
   prochainEntretien?: string
   prochainControleTechnique?: string
   notes?: string
-  isAssigned?: boolean
-  assignation?: {
-    id: string
-    dateDebut: string
-    assignedTo: string
-    assignedToRole: string
-  }
   chauffeurs?: Array<{ id: string; nom: string; prenom: string }>
   assignations?: Array<{
     id: string
@@ -109,6 +104,15 @@ interface User {
   updatedAt: string
 }
 
+interface Chauffeur {
+  id: string
+  nom: string
+  prenom: string
+  telephone?: string
+  vehicule?: string
+  statut: 'DISPONIBLE' | 'OCCUPE' | 'HORS_SERVICE'
+  createdAt: string
+}
 
 interface CombinedUser {
   id: string
@@ -128,7 +132,7 @@ interface CombinedUser {
   }
   actif: boolean
   createdAt: string
-  source: 'users'
+  source: 'users' | 'chauffeurs'
 }
 
 export default function ParametresPage() {
@@ -193,19 +197,11 @@ export default function ParametresPage() {
   const fetchVehicules = async () => {
     try {
       setLoading(true)
-      const response = await fetch('/api/vehicules/with-assignations')
+      const response = await fetch('/api/vehicules')
       const data = await response.json()
-      
-      // Vérifier que data est un tableau
-      if (Array.isArray(data)) {
-        setVehicules(data)
-      } else {
-        console.error('Données invalides pour véhicules:', data)
-        setVehicules([])
-      }
+      setVehicules(data)
     } catch (error) {
       console.error('Erreur lors du chargement des véhicules:', error)
-      setVehicules([])
     } finally {
       setLoading(false)
     }
@@ -235,28 +231,11 @@ export default function ParametresPage() {
   const fetchUsers = async () => {
     try {
       setLoadingUsers(true)
-      console.log('🔄 Chargement des utilisateurs...')
-      
       const response = await fetch('/api/users')
-      console.log('📡 Réponse API users:', response.status, response.statusText)
-      
-      if (!response.ok) {
-        throw new Error(`Erreur API: ${response.status} ${response.statusText}`)
-      }
-      
       const data = await response.json()
-      console.log('📊 Utilisateurs reçus:', data.length, 'utilisateurs')
-      
-      // Vérifier que data est un tableau
-      if (Array.isArray(data)) {
-        setUsers(data)
-      } else {
-        console.error('❌ Données invalides pour utilisateurs:', data)
-        setUsers([])
-      }
+      setUsers(data)
     } catch (error) {
-      console.error('❌ Erreur lors du chargement des utilisateurs:', error)
-      setUsers([]) // Assurer qu'on a un tableau vide en cas d'erreur
+      console.error('Erreur lors du chargement des utilisateurs:', error)
     } finally {
       setLoadingUsers(false)
     }
@@ -406,6 +385,51 @@ export default function ParametresPage() {
     }
   }
 
+  const handleSaveChauffeur = async (chauffeurData: Chauffeur) => {
+    try {
+      const url = chauffeurModal.mode === 'create' 
+        ? '/api/chauffeurs' 
+        : `/api/chauffeurs/${chauffeurData.id}`
+        
+      const method = chauffeurModal.mode === 'create' ? 'POST' : 'PUT'
+      
+      const response = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(chauffeurData)
+      })
+      
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Erreur lors de la sauvegarde')
+      }
+      
+      await fetchChauffeurs()
+      setChauffeurModal({ isOpen: false, mode: 'create', chauffeur: null })
+    } catch (error) {
+      console.error('Erreur:', error)
+      throw error
+    }
+  }
+
+  const handleDeleteChauffeur = async (chauffeurId: string) => {
+    try {
+      const response = await fetch(`/api/chauffeurs/${chauffeurId}`, {
+        method: 'DELETE'
+      })
+      
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Erreur lors de la suppression')
+      }
+      
+      await fetchChauffeurs()
+      setDeleteChauffeurModal({ isOpen: false, chauffeur: null })
+    } catch (error) {
+      console.error('Erreur:', error)
+      throw error
+    }
+  }
 
   const handleAssignVehicule = async (assignationData: any) => {
     try {
@@ -421,6 +445,7 @@ export default function ParametresPage() {
       }
       
       // Recharger les données
+      await fetchChauffeurs()
       await fetchUsers()
       await fetchVehicules()
       await fetchAssignations()
@@ -440,15 +465,18 @@ export default function ParametresPage() {
   }
 
   const handleUnassignVehicle = async (vehicule: Vehicule) => {
-    if (!vehicule.isAssigned || !vehicule.assignation) return
+    const assignation = vehicule.assignations?.find(a => a.actif)
+    if (!assignation) return
 
-    const assignedTo = vehicule.assignation.assignedTo
+    const assignedTo = assignation.chauffeur ? 
+      `${assignation.chauffeur.nom.toUpperCase()}, ${assignation.chauffeur.prenom}` :
+      `${assignation.user.nom.toUpperCase()}, ${assignation.user.prenom}`
 
     if (confirm(`Désassigner ${vehicule.marque} ${vehicule.modele} de ${assignedTo} ?`)) {
       try {
         console.log('🔄 Désassignation véhicule:', vehicule.immatriculation, 'de', assignedTo)
         
-        const response = await fetch(`/api/vehicules/assignations/${vehicule.assignation.id}`, {
+        const response = await fetch(`/api/vehicules/assignations/${assignation.id}`, {
           method: 'DELETE'
         })
         
@@ -475,6 +503,7 @@ export default function ParametresPage() {
         // Recharger les données
         await fetchVehicules()
         await fetchAssignations()
+        await fetchChauffeurs()
         await fetchUsers()
       } catch (error) {
         console.error('❌ Erreur lors de la désassignation:', error)
@@ -591,11 +620,19 @@ export default function ParametresPage() {
                                   </div>
                                   
                                   {(() => {
-                                    if (vehicule.isAssigned && vehicule.assignation) {
+                                    const assignationActive = vehicule.assignations?.find(a => a.actif)
+                                    
+                                    if (assignationActive) {
+                                      const assignedTo = assignationActive.chauffeur ? 
+                                        `${assignationActive.chauffeur.nom.toUpperCase()}, ${assignationActive.chauffeur.prenom}` :
+                                        `${assignationActive.user.nom.toUpperCase()}, ${assignationActive.user.prenom}`
+                                      
+                                      const role = assignationActive.chauffeur ? 'Chauffeur' : assignationActive.user.role
+                                      
                                       return (
                                         <p className="text-xs text-green-600 flex items-center gap-1">
                                           <User className="h-3 w-3" />
-                                          Assigné à: {vehicule.assignation.assignedTo} ({vehicule.assignation.assignedToRole})
+                                          Assigné à: {assignedTo} ({role})
                                         </p>
                                       )
                                     } else {
@@ -612,7 +649,9 @@ export default function ParametresPage() {
                               <div className="flex gap-2">
                                 {/* Bouton d'assignation/désassignation */}
                                 {(() => {
-                                  if (vehicule.isAssigned && vehicule.assignation) {
+                                  const assignationActive = vehicule.assignations?.find(a => a.actif)
+                                  
+                                  if (assignationActive) {
                                     // Véhicule assigné - bouton de désassignation
                                     return (
                                       <Button 
@@ -790,7 +829,7 @@ export default function ParametresPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                {loadingUsers ? (
+                {(loadingUsers || loadingChauffeurs) ? (
                   <div className="space-y-4">
                     {[1, 2, 3].map(i => (
                       <div key={i} className="border rounded-lg p-4 animate-pulse">
@@ -861,7 +900,7 @@ export default function ParametresPage() {
                                     </p>
                                   )}
                                   <p className="text-xs text-muted-foreground">
-                                    Utilisateur depuis le {new Date(person.createdAt).toLocaleDateString('fr-FR')}
+                                    {person.role === 'Chauffeur' && person.source === 'chauffeurs' ? 'Chauffeur' : 'Utilisateur'} depuis le {new Date(person.createdAt).toLocaleDateString('fr-FR')}
                                   </p>
                                 </div>
                               </div>
@@ -873,8 +912,8 @@ export default function ParametresPage() {
                                   title="Assigner un véhicule"
                                   onClick={() => setAssignationModal({ 
                                     isOpen: true, 
-                                    chauffeur: null,
-                                    user: users.find(u => u.id === person.id) || null
+                                    chauffeur: person.source === 'chauffeurs' ? chauffeurs.find(c => c.id === person.id) : null,
+                                    user: person.source === 'users' ? users.find(u => u.id === person.id) : null
                                   })}
                                 >
                                   <Car className="h-4 w-4" />
@@ -883,8 +922,13 @@ export default function ParametresPage() {
                                   variant="outline" 
                                   size="sm"
                                   onClick={() => {
-                                    const user = users.find(u => u.id === person.id)
-                                    setUserModal({ isOpen: true, mode: 'edit', user })
+                                    if (person.source === 'users') {
+                                      const user = users.find(u => u.id === person.id)
+                                      setUserModal({ isOpen: true, mode: 'edit', user })
+                                    } else {
+                                      const chauffeur = chauffeurs.find(c => c.id === person.id)
+                                      setChauffeurModal({ isOpen: true, mode: 'edit', chauffeur })
+                                    }
                                   }}
                                 >
                                   <Edit className="h-4 w-4" />
@@ -893,8 +937,13 @@ export default function ParametresPage() {
                                   variant="outline" 
                                   size="sm"
                                   onClick={() => {
-                                    const user = users.find(u => u.id === person.id)
-                                    setDeleteUserModal({ isOpen: true, user })
+                                    if (person.source === 'users') {
+                                      const user = users.find(u => u.id === person.id)
+                                      setDeleteUserModal({ isOpen: true, user })
+                                    } else {
+                                      const chauffeur = chauffeurs.find(c => c.id === person.id)
+                                      setDeleteChauffeurModal({ isOpen: true, chauffeur })
+                                    }
                                   }}
                                 >
                                   <Trash2 className="h-4 w-4" />
@@ -1329,6 +1378,21 @@ export default function ParametresPage() {
         user={deleteUserModal.user}
       />
       
+      {/* Modales chauffeurs */}
+      <ChauffeurModal
+        isOpen={chauffeurModal.isOpen}
+        onClose={() => setChauffeurModal({ isOpen: false, mode: 'create', chauffeur: null })}
+        onSave={handleSaveChauffeur}
+        chauffeur={chauffeurModal.chauffeur}
+        mode={chauffeurModal.mode}
+      />
+      
+      <DeleteChauffeurModal
+        isOpen={deleteChauffeurModal.isOpen}
+        onClose={() => setDeleteChauffeurModal({ isOpen: false, chauffeur: null })}
+        onDelete={handleDeleteChauffeur}
+        chauffeur={deleteChauffeurModal.chauffeur}
+      />
       
       {/* Modale assignation véhicule */}
       <VehiculeAssignationModal

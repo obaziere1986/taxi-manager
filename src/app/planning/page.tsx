@@ -43,20 +43,22 @@ interface Course {
     nom: string
     prenom: string
   }
-  chauffeur?: {
+  user?: {
     nom: string
     prenom: string
     id: string
+    role: string
   } | null
 }
 
-interface Chauffeur {
+interface User {
   id: string
   nom: string
   prenom: string
   telephone: string
   vehicule: string
   statut: string
+  role: string
 }
 
 interface Client {
@@ -70,7 +72,7 @@ interface Client {
 export default function PlanningPage() {
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [courses, setCourses] = useState<Course[]>([])
-  const [chauffeurs, setChauffeurs] = useState<Chauffeur[]>([])
+  const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [activeId, setActiveId] = useState<string | null>(null)
   const [activeCourse, setActiveCourse] = useState<Course | null>(null)
@@ -161,30 +163,33 @@ export default function PlanningPage() {
 
   const fetchData = async () => {
     try {
-      const [coursesRes, chauffeursRes] = await Promise.all([
+      const [coursesRes, usersRes] = await Promise.all([
         fetch('/api/courses'),
-        fetch('/api/chauffeurs')
+        fetch('/api/users')
       ])
 
-      const [coursesData, chauffeursData] = await Promise.all([
+      const [coursesData, usersData] = await Promise.all([
         coursesRes.json(),
-        chauffeursRes.json()
+        usersRes.json()
       ])
 
       // Vérifier si les réponses sont valides
       if (!Array.isArray(coursesData)) {
         console.error('coursesData n\'est pas un tableau:', coursesData)
         setCourses([])
-        setChauffeurs([])
+        setUsers([])
         return
       }
 
-      if (!Array.isArray(chauffeursData)) {
-        console.error('chauffeursData n\'est pas un tableau:', chauffeursData)
+      if (!Array.isArray(usersData)) {
+        console.error('usersData n\'est pas un tableau:', usersData)
         setCourses([])
-        setChauffeurs([])
+        setUsers([])
         return
       }
+      
+      // Filtrer uniquement les chauffeurs
+      const chauffeurs = usersData.filter(user => user.role === 'Chauffeur')
 
       // Filtrer les courses pour la date sélectionnée
       const dayStart = startOfDay(selectedDate)
@@ -196,7 +201,7 @@ export default function PlanningPage() {
       })
 
       setCourses(filteredCourses)
-      setChauffeurs(chauffeursData)
+      setUsers(chauffeurs)
     } catch (error) {
       console.error('Erreur lors du chargement des données:', error)
     } finally {
@@ -204,7 +209,7 @@ export default function PlanningPage() {
     }
   }
 
-  const handleCourseAssign = async (courseId: string, chauffeurId: string | null) => {
+  const handleCourseAssign = async (courseId: string, userId: string | null) => {
     try {
       const response = await fetch(`/api/courses/${courseId}/assign`, {
         method: 'PUT',
@@ -212,7 +217,7 @@ export default function PlanningPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          chauffeurId: chauffeurId
+          userId: userId
         }),
       })
 
@@ -227,12 +232,12 @@ export default function PlanningPage() {
     }
   }
 
-  const getCoursesForChauffeur = (chauffeurId: string) => {
-    return courses.filter(course => course.chauffeur?.id === chauffeurId)
+  const getCoursesForChauffeur = (userId: string) => {
+    return courses.filter(course => course.user?.id === userId)
   }
 
   const getUnassignedCourses = () => {
-    return courses.filter(course => !course.chauffeur)
+    return courses.filter(course => !course.user)
   }
 
   const navigateDate = (direction: 'prev' | 'next') => {
@@ -283,7 +288,7 @@ export default function PlanningPage() {
     // Si la course est dans le futur, elle ne peut pas être terminée
     if (courseDate > now) {
       if (course.statut === 'TERMINEE') {
-        return course.chauffeur ? 'ASSIGNEE' : 'EN_ATTENTE'
+        return course.user ? 'ASSIGNEE' : 'EN_ATTENTE'
       }
       return course.statut
     }
@@ -325,11 +330,11 @@ export default function PlanningPage() {
     const courseDate = new Date(course.dateHeure)
     const courseHour = courseDate.getHours()
     
-    return chauffeurs
+    return users
       .map(chauffeur => {
         // Obtenir toutes les courses de ce chauffeur pour le jour sélectionné
         const allCoursesForDriver = courses.filter(c => 
-          c.chauffeur?.id === chauffeur.id &&
+          c.user?.id === chauffeur.id &&
           new Date(c.dateHeure).toDateString() === selectedDate.toDateString()
         )
         
@@ -371,7 +376,7 @@ export default function PlanningPage() {
 
   const getCourseForChauffeurAtHour = (chauffeurId: string, hour: number) => {
     const foundCourse = courses.find(course => {
-      if (course.chauffeur?.id !== chauffeurId) return false
+      if (course.user?.id !== chauffeurId) return false
       const courseDate = new Date(course.dateHeure)
       const courseHour = courseDate.getHours()
       
@@ -388,7 +393,7 @@ export default function PlanningPage() {
           courseHour,
           courseDay,
           selectedDay,
-          chauffeur: course.chauffeur
+          user: course.user
         })
       }
       
@@ -455,7 +460,7 @@ export default function PlanningPage() {
     setActiveCourse(course || null)
     
     // Auto-scroll vers l'heure de la course pour les courses non assignées
-    if (course && !course.chauffeur) {
+    if (course && !course.user) {
       setTimeout(() => {
         const courseDate = new Date(course.dateHeure)
         const courseHour = courseDate.getHours()
@@ -512,17 +517,17 @@ export default function PlanningPage() {
     const [chauffeurId, hourStr] = dropId.split('-')
     const hour = parseInt(hourStr)
 
-    const chauffeur = chauffeurs.find(c => c.id === chauffeurId)
+    const chauffeur = users.find(c => c.id === chauffeurId)
     if (!chauffeur) return
 
     // Si la course n'est pas assignée, assigner directement
-    if (!course.chauffeur) {
+    if (!course.user) {
       handleCourseAssign(courseId, chauffeurId)
       return
     }
 
     // Si la course est déjà assignée à un autre chauffeur, demander confirmation
-    if (course.chauffeur.id !== chauffeurId) {
+    if (course.user.id !== chauffeurId) {
       if (confirm(`Êtes-vous sûr de vouloir réassigner cette course à ${chauffeur.nom.toUpperCase()}, ${chauffeur.prenom} ?`)) {
         handleCourseAssign(courseId, chauffeurId)
       }
@@ -640,7 +645,7 @@ export default function PlanningPage() {
           e.stopPropagation()
           setIsClicking(true)
           // Si la course n'est pas assignée, ouvrir la modal d'assignation
-          if (!course.chauffeur || course.statut === 'EN_ATTENTE') {
+          if (!course.user || course.statut === 'EN_ATTENTE') {
             setAssignmentDialog({ isOpen: true, course })
           } else {
             setCourseDetailsDialog({ isOpen: true, course })
@@ -747,7 +752,7 @@ export default function PlanningPage() {
     const slotId = `${chauffeurId}-${hour}`
     const isAvailable = isChauffeurAvailable(chauffeurId, hour)
     const isCompatible = activeCourse && isSlotCompatible(activeCourse, hour)
-    const chauffeur = chauffeurs.find(c => c.id === chauffeurId)
+    const chauffeur = users.find(c => c.id === chauffeurId)
     const isChauffeurAvailableForDrag = chauffeur?.statut === 'DISPONIBLE'
     
     // Logique de coloration pendant le drag
@@ -972,7 +977,7 @@ export default function PlanningPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {chauffeurs
+                      {users
                         .sort((a, b) => {
                           // Tri par statut : DISPONIBLE en premier, puis OCCUPE, puis HORS_SERVICE
                           const statutOrder = { 'DISPONIBLE': 0, 'OCCUPE': 1, 'HORS_SERVICE': 2 }
@@ -1303,14 +1308,14 @@ export default function PlanningPage() {
                     )}
 
                     {/* Chauffeur assigné */}
-                    {courseDetailsDialog.course.chauffeur && (
+                    {courseDetailsDialog.course.user && (
                       <div className="border rounded-lg p-4 bg-green-50">
                         <h4 className="font-medium text-sm mb-2 flex items-center">
                           <User className="h-4 w-4 mr-2" />
                           Chauffeur assigné
                         </h4>
                         <div className="text-sm">
-                          {courseDetailsDialog.course.chauffeur.nom.toUpperCase()}, {courseDetailsDialog.course.chauffeur.prenom}
+                          {courseDetailsDialog.course.user.nom.toUpperCase()}, {courseDetailsDialog.course.user.prenom}
                         </div>
                       </div>
                     )}
@@ -1417,7 +1422,7 @@ export default function PlanningPage() {
                 {!editingCourse && (
                   <div className="flex justify-between pt-4">
                     <div className="space-x-2">
-                      {courseDetailsDialog.course.chauffeur && (
+                      {courseDetailsDialog.course.user && (
                         <Button 
                           variant="outline"
                           onClick={async () => {

@@ -3,10 +3,8 @@
 import { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
 import { AlertTriangle, Car, Wrench, ExternalLink } from "lucide-react"
 import { getVehiculeAlerts, getAlertBadgeVariant } from '@/lib/vehicule-alerts'
-import Link from 'next/link'
 
 interface Vehicule {
   id: string
@@ -16,7 +14,7 @@ interface Vehicule {
   prochaineVidange?: string
   prochainEntretien?: string
   prochainControleTechnique?: string
-  chauffeurs?: Array<{ id: string; nom: string; prenom: string }>
+  users?: Array<{ id: string; nom: string; prenom: string; role: string }>
 }
 
 export function VehiculeAlerts() {
@@ -32,9 +30,17 @@ export function VehiculeAlerts() {
       setLoading(true)
       const response = await fetch('/api/vehicules')
       const data = await response.json()
-      setVehicules(data)
+      
+      // Vérifier que data est un tableau
+      if (Array.isArray(data)) {
+        setVehicules(data)
+      } else {
+        console.error('Données invalides pour véhicules:', data)
+        setVehicules([])
+      }
     } catch (error) {
       console.error('Erreur lors du chargement des véhicules:', error)
+      setVehicules([])
     } finally {
       setLoading(false)
     }
@@ -150,9 +156,9 @@ export function VehiculeAlerts() {
                     </div>
                     
                     
-                    {vehicule.chauffeurs && vehicule.chauffeurs.length > 0 && (
+                    {vehicule.users && vehicule.users.length > 0 && (
                       <p className="text-xs text-muted-foreground">
-                        Assigné à : {vehicule.chauffeurs[0].nom.toUpperCase()} {vehicule.chauffeurs[0].prenom}
+                        Assigné à : {vehicule.users.filter(u => u.role === 'Chauffeur')[0]?.nom.toUpperCase()} {vehicule.users.filter(u => u.role === 'Chauffeur')[0]?.prenom}
                       </p>
                     )}
                   </div>

@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
+import { PhoneInput } from "@/components/ui/phone-input"
 
 interface User {
   id: string
@@ -14,7 +15,8 @@ interface User {
   prenom: string
   email: string
   telephone?: string
-  role: 'CHAUFFEUR' | 'PLANNEUR' | 'ADMIN'
+  role: 'Admin' | 'Planner' | 'Chauffeur'
+  statut?: 'DISPONIBLE' | 'OCCUPE' | 'HORS_SERVICE'
   actif: boolean
 }
 
@@ -32,7 +34,8 @@ export function UserModal({ isOpen, onClose, onSave, user, mode }: UserModalProp
     prenom: '',
     email: '',
     telephone: '',
-    role: 'CHAUFFEUR',
+    role: 'Chauffeur',
+    statut: 'DISPONIBLE',
     actif: true
   })
   const [loading, setLoading] = useState(false)
@@ -46,7 +49,8 @@ export function UserModal({ isOpen, onClose, onSave, user, mode }: UserModalProp
         prenom: '',
         email: '',
         telephone: '',
-        role: 'CHAUFFEUR',
+        role: 'Chauffeur',
+        statut: 'DISPONIBLE',
         actif: true
       })
     }
@@ -130,30 +134,43 @@ export function UserModal({ isOpen, onClose, onSave, user, mode }: UserModalProp
             />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="telephone">Téléphone</Label>
-            <Input
-              id="telephone"
-              type="tel"
-              value={formData.telephone || ''}
-              onChange={(e) => setFormData({ ...formData, telephone: e.target.value })}
-              placeholder="06.12.34.56.78"
-            />
-          </div>
+          <PhoneInput
+            id="telephone"
+            label="Téléphone"
+            value={formData.telephone || ''}
+            onChange={(value) => setFormData({ ...formData, telephone: value })}
+          />
 
           <div className="space-y-2">
             <Label htmlFor="role">Rôle</Label>
-            <Select value={formData.role || 'CHAUFFEUR'} onValueChange={(value: 'CHAUFFEUR' | 'PLANNEUR' | 'ADMIN') => setFormData({ ...formData, role: value })}>
+            <Select value={formData.role || 'Chauffeur'} onValueChange={(value: 'Admin' | 'Planner' | 'Chauffeur') => setFormData({ ...formData, role: value, statut: value === 'Chauffeur' ? (formData.statut || 'DISPONIBLE') : undefined })}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="CHAUFFEUR">Chauffeur</SelectItem>
-                <SelectItem value="PLANNEUR">Planneur</SelectItem>
-                <SelectItem value="ADMIN">Administrateur</SelectItem>
+                <SelectItem value="Chauffeur">Chauffeur</SelectItem>
+                <SelectItem value="Planner">Planner</SelectItem>
+                <SelectItem value="Admin">Administrateur</SelectItem>
               </SelectContent>
             </Select>
           </div>
+
+          {/* Statut (seulement pour les chauffeurs) */}
+          {formData.role === 'Chauffeur' && (
+            <div className="space-y-2">
+              <Label htmlFor="statut">Statut</Label>
+              <Select value={formData.statut || 'DISPONIBLE'} onValueChange={(value: 'DISPONIBLE' | 'OCCUPE' | 'HORS_SERVICE') => setFormData({ ...formData, statut: value })}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="DISPONIBLE">Disponible</SelectItem>
+                  <SelectItem value="OCCUPE">Occupé</SelectItem>
+                  <SelectItem value="HORS_SERVICE">Hors service</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           <div className="flex items-center space-x-2">
             <Switch

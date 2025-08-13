@@ -16,13 +16,6 @@ export async function GET() {
             immatriculation: true
           }
         },
-        chauffeur: {
-          select: {
-            id: true,
-            nom: true,
-            prenom: true
-          }
-        },
         user: {
           select: {
             id: true,

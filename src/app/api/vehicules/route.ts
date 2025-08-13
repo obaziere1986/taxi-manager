@@ -6,12 +6,13 @@ export async function GET() {
   try {
     const vehicules = await prisma.vehicule.findMany({
       include: {
-        chauffeurs: {
+        users: {
           select: {
             id: true,
             nom: true,
             prenom: true,
-            statut: true
+            statut: true,
+            role: true
           }
         }
       },
@@ -78,12 +79,13 @@ export async function POST(request: NextRequest) {
         notes: body.notes || null
       },
       include: {
-        chauffeurs: {
+        users: {
           select: {
             id: true,
             nom: true,
             prenom: true,
-            statut: true
+            statut: true,
+            role: true
           }
         }
       }

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { executeWithRetry } from '@/lib/db'
 
-// GET - Récupérer toutes les assignations véhicule-chauffeur
+// GET - Récupérer toutes les assignations véhicule-user
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
@@ -9,7 +9,8 @@ export async function GET(request: NextRequest) {
     
     const whereClause = vehiculeId ? { vehiculeId: vehiculeId } : {}
     
-    const assignations = await prisma.vehiculeAssignation.findMany({
+    const assignations = await executeWithRetry(async (prisma) => {
+      return await prisma.vehiculeAssignation.findMany({
       where: whereClause,
       include: {
         vehicule: {
@@ -18,13 +19,6 @@ export async function GET(request: NextRequest) {
             marque: true,
             modele: true,
             immatriculation: true
-          }
-        },
-        chauffeur: {
-          select: {
-            id: true,
-            nom: true,
-            prenom: true
           }
         },
         user: {
@@ -36,10 +30,11 @@ export async function GET(request: NextRequest) {
           }
         }
       },
-      orderBy: [
-        { actif: 'desc' },  // Assignations actives en premier
-        { dateDebut: 'desc' }  // Plus récentes en premier
-      ]
+        orderBy: [
+          { actif: 'desc' },  // Assignations actives en premier
+          { dateDebut: 'desc' }  // Plus récentes en premier
+        ]
+      })
     })
 
     console.log(`📊 Récupéré ${assignations.length} assignations`)

@@ -24,25 +24,7 @@ model Client {
   avis      AvisClient[]
 }
 
-model Chauffeur {
-  id        String   @id @default(cuid())
-  nom       String
-  prenom    String
-  telephone String
-  vehicule  String   // Sera remplacé par vehiculeId à terme
-  statut    StatutChauffeur @default(DISPONIBLE)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  
-  userId     String?  @unique
-  user       User?    @relation(fields: [userId], references: [id])
-  
-  vehiculeId String?
-  vehiculeObj Vehicule? @relation(fields: [vehiculeId], references: [id])
-  
-  courses      Course[]
-  assignations VehiculeAssignation[]
-}
+// Model Chauffeur supprimé - maintenant géré par User avec role = 'Chauffeur'
 
 model Course {
   id          String      @id @default(cuid())
@@ -58,8 +40,9 @@ model Course {
   clientId    String
   client      Client      @relation(fields: [clientId], references: [id])
   
-  chauffeurId String?
-  chauffeur   Chauffeur?  @relation(fields: [chauffeurId], references: [id])
+  // Chauffeur maintenant géré via User
+  userId      String?
+  user        User?   @relation(fields: [userId], references: [id])
   
   avis        AvisClient[]
 }
@@ -72,16 +55,16 @@ enum StatutCourse {
   ANNULEE
 }
 
-enum StatutChauffeur {
+enum StatutPersonne {
   DISPONIBLE
   OCCUPE
   HORS_SERVICE
 }
 
 enum RoleUtilisateur {
-  CHAUFFEUR
-  PLANNEUR
-  ADMIN
+  Admin
+  Planner
+  Chauffeur
 }
 
 model User {
@@ -89,13 +72,22 @@ model User {
   nom       String
   prenom    String
   email     String          @unique
-  telephone String?
-  role      RoleUtilisateur @default(CHAUFFEUR)
+  telephone String
+  role      RoleUtilisateur @default(Chauffeur)
+  statut    StatutPersonne? @default(DISPONIBLE)
   actif     Boolean         @default(true)
-  createdAt DateTime        @default(now())
-  updatedAt DateTime        @updatedAt
   
-  chauffeur    Chauffeur?
+  // Informations véhicule (pour les chauffeurs)
+  vehicule    String?
+  vehiculeId  String?
+  vehiculeObj Vehicule? @relation(fields: [vehiculeId], references: [id])
+  
+  // Métadonnées
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relations
+  courses      Course[]
   assignations VehiculeAssignation[]
 }
 
@@ -122,7 +114,8 @@ model Vehicule {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   
-  chauffeurs     Chauffeur[]
+  // Relation avec User au lieu de Chauffeur
+  users          User[]
   assignations   VehiculeAssignation[]
 }
 
@@ -138,11 +131,9 @@ model VehiculeAssignation {
   vehiculeId   String
   vehicule     Vehicule  @relation(fields: [vehiculeId], references: [id])
   
-  chauffeurId  String?
-  chauffeur    Chauffeur? @relation(fields: [chauffeurId], references: [id])
-  
+  // Assignation simplifiée - seulement User
   userId       String?
-  user         User?     @relation(fields: [userId], references: [id])
+  user         User?   @relation(fields: [userId], references: [id])
 }
 
 model AvisClient {

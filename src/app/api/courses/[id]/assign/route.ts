@@ -8,7 +8,7 @@ export async function PUT(
   try {
     const { id } = await params
     const body = await request.json()
-    const { chauffeurId } = body
+    const { userId } = body
 
     const course = await executeWithRetry(async (prisma) => {
       // Vérifier que la course existe
@@ -20,29 +20,33 @@ export async function PUT(
         throw new Error('Course non trouvée')
       }
 
-      // Si on assigne à un chauffeur, vérifier qu'il existe
-      if (chauffeurId) {
-        const existingChauffeur = await prisma.chauffeur.findUnique({
-          where: { id: chauffeurId }
+      // Si on assigne à un utilisateur, vérifier qu'il existe et qu'il est chauffeur
+      if (userId) {
+        const existingUser = await prisma.user.findUnique({
+          where: { id: userId }
         })
 
-        if (!existingChauffeur) {
-          throw new Error('Chauffeur non trouvé')
+        if (!existingUser) {
+          throw new Error('Utilisateur non trouvé')
+        }
+        
+        if (existingUser.role !== 'Chauffeur') {
+          throw new Error('L\'utilisateur n\'est pas un chauffeur')
         }
       }
 
       return await prisma.course.update({
         where: { id },
         data: {
-          chauffeurId: chauffeurId || null,
-          statut: chauffeurId ? 'ASSIGNEE' : 'EN_ATTENTE',
+          userId: userId || null,
+          statut: userId ? 'ASSIGNEE' : 'EN_ATTENTE',
         },
         include: {
           client: {
             select: { nom: true, prenom: true, telephone: true }
           },
-          chauffeur: {
-            select: { nom: true, prenom: true, vehicule: true }
+          user: {
+            select: { nom: true, prenom: true, vehicule: true, role: true }
           }
         }
       })

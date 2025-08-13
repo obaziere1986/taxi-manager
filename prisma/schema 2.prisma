@@ -21,6 +21,7 @@ model Client {
   updatedAt DateTime @updatedAt
   
   courses   Course[]
+  avis      AvisClient[]
 }
 
 model Chauffeur {
@@ -28,12 +29,19 @@ model Chauffeur {
   nom       String
   prenom    String
   telephone String
-  vehicule  String
+  vehicule  String   // Sera remplacé par vehiculeId à terme
   statut    StatutChauffeur @default(DISPONIBLE)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   
-  courses   Course[]
+  userId     String?  @unique
+  user       User?    @relation(fields: [userId], references: [id])
+  
+  vehiculeId String?
+  vehiculeObj Vehicule? @relation(fields: [vehiculeId], references: [id])
+  
+  courses      Course[]
+  assignations VehiculeAssignation[]
 }
 
 model Course {
@@ -52,6 +60,8 @@ model Course {
   
   chauffeurId String?
   chauffeur   Chauffeur?  @relation(fields: [chauffeurId], references: [id])
+  
+  avis        AvisClient[]
 }
 
 enum StatutCourse {
@@ -66,4 +76,96 @@ enum StatutChauffeur {
   DISPONIBLE
   OCCUPE
   HORS_SERVICE
+}
+
+enum RoleUtilisateur {
+  Admin
+  Planner
+  Chauffeur
+}
+
+model User {
+  id        String          @id @default(cuid())
+  nom       String
+  prenom    String
+  email     String          @unique
+  telephone String?
+  role      RoleUtilisateur @default(Chauffeur)
+  statut    StatutChauffeur? // Pour les chauffeurs uniquement
+  actif     Boolean         @default(true)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  
+  chauffeur    Chauffeur?
+  assignations VehiculeAssignation[]
+}
+
+model Vehicule {
+  id             String   @id @default(cuid())
+  marque         String
+  modele         String
+  immatriculation String  @unique
+  couleur        String?
+  annee          Int?
+  actif          Boolean  @default(true)
+  
+  // Informations techniques
+  kilometrage    Int?     @default(0)
+  carburant      String?  // ESSENCE, DIESEL, HYBRIDE, ELECTRIQUE
+  
+  // Prochaines dates d'entretien
+  prochaineVidange    DateTime?
+  prochainEntretien  DateTime?
+  prochainControleTechnique DateTime?
+  
+  // Métadonnées
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  
+  chauffeurs     Chauffeur[]
+  assignations   VehiculeAssignation[]
+}
+
+model VehiculeAssignation {
+  id           String    @id @default(cuid())
+  dateDebut    DateTime  @default(now())
+  dateFin      DateTime?
+  actif        Boolean   @default(true)
+  notes        String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  
+  vehiculeId   String
+  vehicule     Vehicule  @relation(fields: [vehiculeId], references: [id])
+  
+  chauffeurId  String?
+  chauffeur    Chauffeur? @relation(fields: [chauffeurId], references: [id])
+  
+  userId       String?
+  user         User?     @relation(fields: [userId], references: [id])
+}
+
+model AvisClient {
+  id          String   @id @default(cuid())
+  note        Int      // Note sur 5
+  commentaire String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  courseId    String
+  course      Course   @relation(fields: [courseId], references: [id])
+  
+  clientId    String
+  client      Client   @relation(fields: [clientId], references: [id])
+}
+
+model Parametre {
+  id        String   @id @default(cuid())
+  cle       String   @unique
+  valeur    String
+  type      String   @default("string") // string, number, boolean, json
+  description String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

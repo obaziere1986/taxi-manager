@@ -21,7 +21,6 @@ export async function GET(request: NextRequest) {
         dateDebut: true,
         dateFin: true,
         vehiculeId: true,
-        chauffeurId: true,
         userId: true
       },
       orderBy: [
@@ -42,13 +41,6 @@ export async function GET(request: NextRequest) {
             marque: true,
             modele: true,
             immatriculation: true
-          }
-        },
-        chauffeur: {
-          select: {
-            id: true,
-            nom: true,
-            prenom: true
           }
         },
         user: {

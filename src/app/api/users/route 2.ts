@@ -8,7 +8,7 @@ export async function GET(request: NextRequest) {
     const role = searchParams.get('role') // Filtre optionnel par rôle
     
     const users = await executeWithRetry(async (prisma) => {
-      const whereClause = role ? { role: role as 'Admin' | 'Planner' | 'Chauffeur' } : {}
+      const whereClause = role ? { role: role as any } : {}
       
       return await prisma.user.findMany({
         where: whereClause,
@@ -40,57 +40,45 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     
-    const { nom, prenom, email, telephone, role, statut, vehicule, vehiculeId } = body
-
-    // Validation
-    if (!nom || !prenom || !email || !telephone || !role) {
-      return NextResponse.json(
-        { error: 'Les champs nom, prenom, email, telephone et role sont requis' },
-        { status: 400 }
-      )
+    // Validation des données
+    const requiredFields = ['nom', 'prenom', 'email']
+    for (const field of requiredFields) {
+      if (!body[field]) {
+        return NextResponse.json(
+          { error: `Le champ ${field} est requis` },
+          { status: 400 }
+        )
+      }
     }
 
-    const user = await executeWithRetry(async (prisma) => {
-      // Vérifier que l'email n'existe pas
-      const existingUser = await prisma.user.findUnique({
-        where: { email: email.toLowerCase() }
-      })
-
-      if (existingUser) {
-        throw new Error('EMAIL_EXISTS')
+    // Vérifier que l'email n'existe pas déjà
+    const existingUser = await prisma.user.findFirst({
+      where: {
+        email: body.email
       }
-
-      return await prisma.user.create({
-        data: {
-          nom: nom.toUpperCase(),
-          prenom,
-          email: email.toLowerCase(),
-          telephone,
-          role,
-          statut: statut || 'DISPONIBLE',
-          vehicule: vehicule || null,
-          vehiculeId: vehiculeId || null,
-          actif: true
-        },
-        include: {
-          _count: {
-            select: { courses: true }
-          }
-        }
-      })
     })
 
-    return NextResponse.json(user, { status: 201 })
-  } catch (error) {
-    console.error('Erreur lors de la création de l\'utilisateur:', error)
-    
-    if (error instanceof Error && error.message === 'EMAIL_EXISTS') {
+    if (existingUser) {
       return NextResponse.json(
         { error: 'Cette adresse email existe déjà' },
         { status: 409 }
       )
     }
-    
+
+    const user = await prisma.user.create({
+      data: {
+        nom: body.nom.toUpperCase(),
+        prenom: body.prenom,
+        email: body.email.toLowerCase(),
+        telephone: body.telephone || null,
+        role: body.role || 'CHAUFFEUR',
+        actif: body.actif !== undefined ? body.actif : true
+      }
+    })
+
+    return NextResponse.json(user, { status: 201 })
+  } catch (error) {
+    console.error('Erreur lors de la création de l\'utilisateur:', error)
     return NextResponse.json(
       { error: 'Erreur lors de la création de l\'utilisateur' },
       { status: 500 }

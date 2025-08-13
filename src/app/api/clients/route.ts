@@ -10,6 +10,20 @@ export async function GET() {
           { prenom: 'asc' }
         ],
         include: {
+          courses: {
+            select: {
+              id: true,
+              origine: true,
+              destination: true,
+              dateHeure: true,
+              statut: true,
+              prix: true,
+              notes: true
+            },
+            orderBy: {
+              dateHeure: 'desc'
+            }
+          },
           _count: {
             select: { courses: true }
           }

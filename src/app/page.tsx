@@ -40,17 +40,31 @@ export default function Home() {
 
   const fetchDashboardData = async () => {
     try {
-      const [coursesRes, chauffeursRes, clientsRes] = await Promise.all([
+      const [coursesRes, usersRes, clientsRes] = await Promise.all([
         fetch('/api/courses'),
-        fetch('/api/chauffeurs'),
+        fetch('/api/users'),
         fetch('/api/clients')
       ])
 
-      const [courses, chauffeurs, clients] = await Promise.all([
+      // Vérifier que les réponses sont OK et contiennent du JSON
+      if (!coursesRes.ok || !usersRes.ok || !clientsRes.ok) {
+        throw new Error('Erreur lors du chargement des données')
+      }
+
+      const [courses, users, clients] = await Promise.all([
         coursesRes.json(),
-        chauffeursRes.json(),
+        usersRes.json(),
         clientsRes.json()
       ])
+
+      // Filtrer les chauffeurs parmi les utilisateurs
+      const chauffeurs = Array.isArray(users) ? users.filter(user => user.role === 'Chauffeur') : []
+
+      // Vérifier que les données sont des tableaux
+      if (!Array.isArray(courses) || !Array.isArray(users) || !Array.isArray(clients)) {
+        console.error('Données invalides reçues:', { courses, users, clients })
+        throw new Error('Format de données invalide')
+      }
 
       const today = new Date()
       const yesterday = new Date(today)

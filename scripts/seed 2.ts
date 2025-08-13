@@ -100,63 +100,29 @@ async function main() {
   await prisma.course.deleteMany()
   await prisma.vehiculeAssignation.deleteMany()
   await prisma.avisClient.deleteMany()
-  // Chauffeur supprimé - maintenant dans User
+  await prisma.chauffeur.deleteMany()
   await prisma.client.deleteMany()
   await prisma.user.deleteMany()
   await prisma.vehicule.deleteMany()
   await prisma.parametre.deleteMany()
 
-  // Créer des utilisateurs avec différents rôles
-  console.log('👥 Création des utilisateurs...')
-  const users = []
-  const usedUserNames = new Set<string>()
-  
-  // 8 chauffeurs
-  for (let i = 0; i < 8; i++) {
-    const { prenom, nom } = getUniqueRandomPerson(usedUserNames)
-    const user = await prisma.user.create({
+  // Créer 10 chauffeurs
+  console.log('👨‍💼 Création des chauffeurs...')
+  const chauffeurs = []
+  const usedChauffeurNames = new Set<string>()
+  for (let i = 0; i < 10; i++) {
+    const { prenom, nom } = getUniqueRandomPerson(usedChauffeurNames)
+    const chauffeur = await prisma.chauffeur.create({
       data: {
         prenom,
         nom,
-        email: `${prenom.toLowerCase()}.${nom.toLowerCase()}@taxicompany.fr`,
         telephone: getRandomPhone(),
-        role: 'Chauffeur',
         vehicule: getRandomElement(véhicules),
-        statut: i < 6 ? 'DISPONIBLE' : i === 6 ? 'OCCUPE' : 'HORS_SERVICE'
+        statut: i < 8 ? 'DISPONIBLE' : i === 8 ? 'OCCUPE' : 'HORS_SERVICE'
       }
     })
-    users.push(user)
+    chauffeurs.push(chauffeur)
   }
-  
-  // 1 planneur
-  const { prenom: prenomPlanneur, nom: nomPlanneur } = getUniqueRandomPerson(usedUserNames)
-  const planneur = await prisma.user.create({
-    data: {
-      prenom: prenomPlanneur,
-      nom: nomPlanneur,
-      email: `${prenomPlanneur.toLowerCase()}.${nomPlanneur.toLowerCase()}@taxicompany.fr`,
-      telephone: getRandomPhone(),
-      role: 'Planner',
-      statut: 'DISPONIBLE'
-    }
-  })
-  users.push(planneur)
-  
-  // 1 admin
-  const { prenom: prenomAdmin, nom: nomAdmin } = getUniqueRandomPerson(usedUserNames)
-  const admin = await prisma.user.create({
-    data: {
-      prenom: prenomAdmin,
-      nom: nomAdmin,
-      email: `${prenomAdmin.toLowerCase()}.${nomAdmin.toLowerCase()}@taxicompany.fr`,
-      telephone: getRandomPhone(),
-      role: 'Admin',
-      statut: 'DISPONIBLE'
-    }
-  })
-  users.push(admin)
-  
-  const chauffeurs = users.filter(u => u.role === 'Chauffeur')
 
   // Créer 50 clients
   console.log('👥 Création des clients...')
@@ -182,10 +148,8 @@ async function main() {
   const statuts = ['EN_ATTENTE', 'ASSIGNEE', 'EN_COURS', 'TERMINEE', 'ANNULEE']
   const statusWeights = [0.2, 0.3, 0.1, 0.35, 0.05] // Probabilités
   
-  let coursesCount = 0
   for (let day = -1; day <= 1; day++) {
     const coursesForDay = day === 0 ? 25 : 15 // Plus de courses aujourd'hui
-    coursesCount += coursesForDay
     
     for (let i = 0; i < coursesForDay; i++) {
       const client = getRandomElement(clients)
@@ -212,7 +176,7 @@ async function main() {
           destination: getRandomElement(adressesDestinations),
           dateHeure: getRandomDateTime(day),
           clientId: client.id,
-          userId: chauffeur?.id || null,
+          chauffeurId: chauffeur?.id || null,
           statut: statut as any,
           prix: statut === 'TERMINEE' ? getRandomPrice() : null,
           notes: Math.random() > 0.7 ? 'Instructions spéciales pour cette course' : null
@@ -223,9 +187,9 @@ async function main() {
 
   console.log('✅ Seeding terminé!')
   console.log(`📊 Créé:`)
-  console.log(`   - ${users.length} utilisateurs (${chauffeurs.length} chauffeurs, 1 planneur, 1 admin)`)
-  console.log(`   - ${clients.length} clients`) 
-  console.log(`   - ~${coursesCount} courses (sur 3 jours)`)
+  console.log(`   - 10 chauffeurs`)
+  console.log(`   - 50 clients`) 
+  console.log(`   - ~55 courses (sur 3 jours)`)
 }
 
 main()

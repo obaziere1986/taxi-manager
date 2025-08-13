@@ -13,7 +13,6 @@ async function checkDatabase() {
     // Compter les enregistrements dans chaque table
     const counts = await Promise.all([
       prisma.vehicule.count(),
-      prisma.chauffeur.count(),
       prisma.client.count(),
       prisma.course.count(),
       prisma.vehiculeAssignation.count(),
@@ -22,11 +21,10 @@ async function checkDatabase() {
     
     console.log('📊 Données dans la base :')
     console.log(`   - Véhicules: ${counts[0]}`)
-    console.log(`   - Chauffeurs: ${counts[1]}`)
-    console.log(`   - Clients: ${counts[2]}`)
-    console.log(`   - Courses: ${counts[3]}`)
-    console.log(`   - Assignations: ${counts[4]}`)
-    console.log(`   - Utilisateurs: ${counts[5]}`)
+    console.log(`   - Clients: ${counts[1]}`)
+    console.log(`   - Courses: ${counts[2]}`)
+    console.log(`   - Assignations: ${counts[3]}`)
+    console.log(`   - Utilisateurs: ${counts[4]}`)
     
     // Test de requête complexe
     const vehiculesAvecAlertes = await prisma.vehicule.findMany({
@@ -38,7 +36,7 @@ async function checkDatabase() {
         ]
       },
       include: {
-        chauffeurs: true
+        users: true
       }
     })
     

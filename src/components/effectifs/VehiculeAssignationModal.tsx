@@ -4,18 +4,10 @@ import { useState, useEffect } from 'react'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
-import { Car, User } from 'lucide-react'
-
-interface Vehicule {
-  id: string
-  marque: string
-  modele: string
-  immatriculation: string
-  actif: boolean
-}
+import { VehicleCombobox } from "@/components/ui/vehicle-combobox"
+import { User, Car } from 'lucide-react'
 
 interface Chauffeur {
   id: string
@@ -37,7 +29,6 @@ interface VehiculeAssignationModalProps {
   onAssign: (assignationData: any) => Promise<void>
   chauffeur?: Chauffeur | null
   user?: User | null
-  vehicules: Vehicule[]
 }
 
 export function VehiculeAssignationModal({ 
@@ -45,8 +36,7 @@ export function VehiculeAssignationModal({
   onClose, 
   onAssign, 
   chauffeur,
-  user,
-  vehicules 
+  user
 }: VehiculeAssignationModalProps) {
   const [selectedVehicule, setSelectedVehicule] = useState<string>('')
   const [notes, setNotes] = useState('')
@@ -69,8 +59,7 @@ export function VehiculeAssignationModal({
     setLoading(true)
     try {
       await onAssign({
-        chauffeurId: chauffeur?.id || null,
-        userId: user?.id || null,
+        userId: (user?.id || chauffeur?.id) || null,
         vehiculeId: selectedVehicule,
         dateDebut: new Date().toISOString(),
         actif: true,
@@ -85,8 +74,7 @@ export function VehiculeAssignationModal({
     }
   }
 
-  // Filtrer les véhicules disponibles (actifs et pas encore assignés)
-  const availableVehicules = vehicules.filter(v => v.actif)
+  // La combobox gère la récupération des véhicules
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -129,29 +117,14 @@ export function VehiculeAssignationModal({
             </div>
 
             {/* Sélection véhicule */}
-            <div className="space-y-2">
-              <Label htmlFor="vehicule">Véhicule à assigner *</Label>
-              <Select value={selectedVehicule} onValueChange={setSelectedVehicule} required>
-                <SelectTrigger>
-                  <SelectValue placeholder="Choisir un véhicule..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableVehicules.length === 0 ? (
-                    <SelectItem value="" disabled>Aucun véhicule disponible</SelectItem>
-                  ) : (
-                    availableVehicules.map((vehicule) => (
-                      <SelectItem key={vehicule.id} value={vehicule.id}>
-                        <div className="flex items-center gap-2">
-                          <Car className="h-4 w-4" />
-                          <span>{vehicule.marque} {vehicule.modele}</span>
-                          <span className="text-muted-foreground">({vehicule.immatriculation})</span>
-                        </div>
-                      </SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
+            <VehicleCombobox
+              id="vehicule"
+              label="Véhicule à assigner *"
+              value={selectedVehicule}
+              onChange={setSelectedVehicule}
+              required
+              placeholder="Rechercher et sélectionner un véhicule..."
+            />
 
             {/* Notes */}
             <div className="space-y-2">
@@ -171,7 +144,7 @@ export function VehiculeAssignationModal({
               </Button>
               <Button 
                 type="submit" 
-                disabled={loading || !selectedVehicule || availableVehicules.length === 0}
+                disabled={loading || !selectedVehicule}
               >
                 {loading ? 'Assignation...' : 'Assigner'}
               </Button>

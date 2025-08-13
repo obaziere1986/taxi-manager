@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { executeWithRetry } from '@/lib/db'
 
 export async function PUT(
   request: NextRequest,
@@ -8,33 +8,39 @@ export async function PUT(
   try {
     const { id } = await params
     const body = await request.json()
-    const { origine, destination, dateHeure, clientId, chauffeurId, prix, notes, statut } = body
+    const { origine, destination, dateHeure, clientId, userId, prix, notes, statut } = body
 
-    const course = await prisma.course.update({
-      where: { id },
-      data: {
-        origine,
-        destination,
-        dateHeure: dateHeure ? new Date(dateHeure) : undefined,
-        clientId,
-        chauffeurId: chauffeurId || null,
-        prix: prix ? parseFloat(prix) : null,
-        notes: notes || null,
-        statut: statut || undefined,
-      },
-      include: {
-        client: {
-          select: { id: true, nom: true, prenom: true, telephone: true }
+    const course = await executeWithRetry(async (prisma) => {
+      return await prisma.course.update({
+        where: { id },
+        data: {
+          origine,
+          destination,
+          dateHeure: dateHeure ? new Date(dateHeure) : undefined,
+          clientId,
+          userId: userId || null,
+          prix: prix ? parseFloat(prix) : null,
+          notes: notes || null,
+          statut: statut || undefined,
         },
-        chauffeur: {
-          select: { id: true, nom: true, prenom: true, vehicule: true }
+        include: {
+          client: {
+            select: { id: true, nom: true, prenom: true, telephone: true }
+          },
+          user: {
+            select: { id: true, nom: true, prenom: true, vehicule: true, role: true }
+          }
         }
-      }
+      })
     })
 
     return NextResponse.json(course)
   } catch (error) {
-    return NextResponse.json({ error: 'Erreur lors de la mise à jour de la course' }, { status: 500 })
+    console.error('Erreur mise à jour course:', error)
+    return NextResponse.json({ 
+      error: 'Erreur lors de la mise à jour de la course',
+      details: process.env.NODE_ENV === 'development' ? error : undefined
+    }, { status: 500 })
   }
 }
 
@@ -44,12 +50,18 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params
-    await prisma.course.delete({
-      where: { id },
+    await executeWithRetry(async (prisma) => {
+      return await prisma.course.delete({
+        where: { id },
+      })
     })
 
     return NextResponse.json({ message: 'Course supprimée avec succès' })
   } catch (error) {
-    return NextResponse.json({ error: 'Erreur lors de la suppression de la course' }, { status: 500 })
+    console.error('Erreur suppression course:', error)
+    return NextResponse.json({ 
+      error: 'Erreur lors de la suppression de la course',
+      details: process.env.NODE_ENV === 'development' ? error : undefined
+    }, { status: 500 })
   }
 }

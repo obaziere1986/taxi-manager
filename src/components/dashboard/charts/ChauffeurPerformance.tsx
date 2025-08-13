@@ -32,10 +32,17 @@ export function ChauffeurPerformance() {
     try {
       const response = await fetch('/api/analytics/chauffeur-performance')
       const performanceData = await response.json()
-      // Prendre seulement les 6 meilleurs pour l'affichage
-      setData(performanceData.slice(0, 6))
+      
+      // Vérifier que performanceData est un tableau
+      if (Array.isArray(performanceData)) {
+        setData(performanceData.slice(0, 6))
+      } else {
+        console.error('Données invalides:', performanceData)
+        setData([])
+      }
     } catch (error) {
       console.error('Erreur lors du chargement performance:', error)
+      setData([])
     } finally {
       setLoading(false)
     }
