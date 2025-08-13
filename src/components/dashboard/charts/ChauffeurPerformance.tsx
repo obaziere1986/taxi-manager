@@ -10,14 +10,7 @@ interface ChauffeurPerformance {
   prenom: string
   vehicule: string
   statut: string
-  totalCourses: number
   coursesTerminees: number
-  coursesEnCours: number
-  coursesAnnulees: number
-  revenu: number
-  tempsConducte: number
-  tauxEfficacite: number
-  moyennePrixCourse: number
 }
 
 export function ChauffeurPerformance() {
@@ -55,11 +48,8 @@ export function ChauffeurPerformance() {
         <div className="bg-background border rounded-lg p-3 shadow-lg">
           <p className="font-medium">{`${data.prenom} ${data.nom.toUpperCase()}`}</p>
           <p className="text-sm text-muted-foreground">{data.vehicule}</p>
-          <div className="mt-2 space-y-1">
+          <div className="mt-2">
             <p className="text-sm">Courses terminées: <span className="font-medium text-green-600">{data.coursesTerminees}</span></p>
-            <p className="text-sm">Revenus: <span className="font-medium text-yellow-600">{data.revenu}€</span></p>
-            <p className="text-sm">Efficacité: <span className="font-medium">{data.tauxEfficacite}%</span></p>
-            <p className="text-sm">Temps conduite: <span className="font-medium">{data.tempsConducte}h</span></p>
           </div>
         </div>
       )
@@ -72,7 +62,7 @@ export function ChauffeurPerformance() {
       <Card>
         <CardHeader>
           <CardTitle>Top Chauffeurs</CardTitle>
-          <CardDescription>Performances du mois en cours</CardDescription>
+          <CardDescription>Courses terminées - 30 derniers jours</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="h-[300px] flex items-center justify-center">
@@ -92,7 +82,7 @@ export function ChauffeurPerformance() {
     <Card>
       <CardHeader>
         <CardTitle>Top Chauffeurs</CardTitle>
-        <CardDescription>Les 6 meilleurs chauffeurs du mois</CardDescription>
+        <CardDescription>Classement des 6 meilleurs - 30 derniers jours</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="h-[300px]">
@@ -117,12 +107,6 @@ export function ChauffeurPerformance() {
                 dataKey="coursesTerminees" 
                 fill="hsl(142 76% 36%)" 
                 name="Courses terminées"
-                radius={[2, 2, 0, 0]}
-              />
-              <Bar 
-                dataKey="revenu" 
-                fill="hsl(45 93% 47%)" 
-                name="Revenus (€)"
                 radius={[2, 2, 0, 0]}
               />
             </BarChart>

@@ -210,7 +210,7 @@ export default function Home() {
                       <div className="flex-1 space-y-1">
                         <p className="text-sm font-medium">{course.origine} → {course.destination}</p>
                         <p className="text-xs text-muted-foreground">
-                          {course.client.nom.toUpperCase()}, {course.client.prenom} - {new Date(course.dateHeure).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                          {course.client.nom.toUpperCase()}, {course.client.prenom} - {new Date(course.dateHeure).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })} à {new Date(course.dateHeure).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
                         </p>
                       </div>
                       <div className="text-sm font-medium">{course.prix ? `${course.prix}€` : '-'}</div>

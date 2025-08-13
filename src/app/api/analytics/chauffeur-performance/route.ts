@@ -4,6 +4,10 @@ import { executeWithRetry } from '@/lib/db'
 export async function GET() {
   try {
     const performance = await executeWithRetry(async (prisma) => {
+      // Date d'il y a 30 jours
+      const thirtyDaysAgo = new Date()
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+      
       // Récupérer tous les chauffeurs (users avec role Chauffeur)
       const chauffeurs = await prisma.user.findMany({
         where: { 
@@ -13,8 +17,9 @@ export async function GET() {
         include: {
           courses: {
             where: {
+              statut: 'TERMINEE', // Seulement les courses terminées
               dateHeure: {
-                gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1) // Début du mois
+                gte: thirtyDaysAgo // 30 derniers jours
               }
             }
           }
@@ -23,15 +28,7 @@ export async function GET() {
 
       // Calculer les métriques pour chaque chauffeur
       const performanceData = chauffeurs.map(chauffeur => {
-        const courses = chauffeur.courses
-        const coursesTerminees = courses.filter(c => c.statut === 'TERMINEE')
-        const coursesEnCours = courses.filter(c => c.statut === 'EN_COURS')
-        const coursesAnnulees = courses.filter(c => c.statut === 'ANNULEE')
-        
-        const revenu = coursesTerminees.reduce((sum, course) => sum + (course.prix || 0), 0)
-        const totalCourses = courses.length
-        const tauxEfficacite = totalCourses > 0 ? Math.round((coursesTerminees.length / totalCourses) * 100) : 0
-        const moyennePrixCourse = coursesTerminees.length > 0 ? revenu / coursesTerminees.length : 0
+        const coursesTerminees = chauffeur.courses // Déjà filtrées sur TERMINEE dans la requête
 
         return {
           id: chauffeur.id,
@@ -39,14 +36,7 @@ export async function GET() {
           prenom: chauffeur.prenom,
           vehicule: chauffeur.vehicule || 'N/A',
           statut: chauffeur.statut || 'DISPONIBLE',
-          totalCourses,
-          coursesTerminees: coursesTerminees.length,
-          coursesEnCours: coursesEnCours.length,
-          coursesAnnulees: coursesAnnulees.length,
-          revenu: Math.round(revenu),
-          tempsConducte: coursesTerminees.length * 1.5, // Estimation 1.5h par course
-          tauxEfficacite,
-          moyennePrixCourse: Math.round(moyennePrixCourse * 100) / 100
+          coursesTerminees: coursesTerminees.length
         }
       })
 

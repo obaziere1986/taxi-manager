@@ -43,19 +43,30 @@ pnpm run db:check             # Vérifier la stabilité de la DB
 
 ### Modèles de Données Principaux
 
+**User** (remplace Chauffeur)
+- `nom`, `prenom`, `email`, `telephone`, `role` (Admin | Planner | Chauffeur)
+- `statut` : DISPONIBLE | OCCUPE | HORS_SERVICE
+- `vehicule?`, `vehiculeId?` : Référence au véhicule assigné
+- Relations: `courses[]`, `assignations[]`
+
 **Client**
 - `nom`, `prenom`, `telephone`, `email?`, `adresses?` (JSON array)
-- Relations: `courses[]`
+- Relations: `courses[]`, `avis[]`
 
-**Chauffeur** 
-- `nom`, `prenom`, `telephone`, `vehicule`
-- `statut` : DISPONIBLE | OCCUPE | HORS_SERVICE
-- Relations: `courses[]`
+**Vehicule**
+- `marque`, `modele`, `immatriculation` (unique), `couleur?`, `annee?`
+- `kilometrage?`, `carburant?` (ESSENCE | DIESEL | HYBRIDE | ELECTRIQUE)
+- `prochaineVidange?`, `prochainEntretien?`, `prochainControleTechnique?`
+- Relations: `users[]`, `assignations[]`
+
+**VehiculeAssignation**
+- `dateDebut`, `dateFin?`, `actif`, `notes?`
+- Relations: `vehicule`, `user`
 
 **Course**
 - `origine`, `destination`, `dateHeure`, `prix?`, `notes?`
 - `statut` : EN_ATTENTE | ASSIGNEE | EN_COURS | TERMINEE | ANNULEE
-- Relations: `client`, `chauffeur?`
+- Relations: `client`, `user?` (chauffeur assigné)
 
 ## 🎯 Fonctionnalités Principales
 
@@ -63,9 +74,10 @@ pnpm run db:check             # Vérifier la stabilité de la DB
 - **KPIs en temps réel** : courses du jour, chauffeurs actifs, revenus
 - **Graphiques interactifs** (Recharts) :
   - Timeline des courses (7 jours)
-  - Performance des chauffeurs (barres) 
+  - Performance des chauffeurs - **30 derniers jours uniquement**
   - Évolution des revenus (aires)
-- **Classement chauffeurs** avec métriques détaillées
+- **Top Chauffeurs** : Classement par courses terminées (sans revenus)
+- **Historique courses** : Avec dates complètes (JJ/MM/AAAA à HH:MM)
 - **Statistiques financières** avec taux de croissance
 
 ### 👥 Gestion des Clients
@@ -74,11 +86,21 @@ pnpm run db:check             # Vérifier la stabilité de la DB
 - **Modal de détails** avec historique complet des courses
 - **Statistiques client** : total courses, CA généré, taux d'annulation
 - **CRUD complet** avec validation
+- **Noms d'acteurs français** : Toutes générations confondues
 
-### 🚗 Gestion des Chauffeurs  
+### 🚗 Gestion des Utilisateurs (ex-Chauffeurs)
+- **Système de rôles** : Admin, Planner, Chauffeur
 - **Vue d'ensemble** avec statuts en temps réel
 - **Métriques de performance** individuelles
 - **CRUD complet** avec gestion des véhicules
+- **Assignation véhicules** : Système complet avec historique
+
+### 🚙 Gestion des Véhicules
+- **CRUD complet** : Création, modification, suppression
+- **Caractéristiques techniques** : Kilométrage, carburant, entretien
+- **Assignations actives** : Suivi en temps réel
+- **Historique assignations** : Avec notes et dates
+- **Maintenance** : Dates de vidange, entretien, contrôle technique
 
 ### 📅 Planning Interactif
 - **Interface drag-and-drop** pour assigner les courses
@@ -86,18 +108,27 @@ pnpm run db:check             # Vérifier la stabilité de la DB
 - **Colonnes par chauffeur** + colonne "non assignées"
 - **Statuts visuels** avec codes couleur
 - **Création de courses** depuis le planning
+- **Courses sur 5 semaines** : 2 passées + 3 futures
 
 ## 🛠️ Structure du Code
 
 ### APIs
 ```
 /api/clients/          # CRUD clients
-/api/chauffeurs/       # CRUD chauffeurs  
+/api/users/            # CRUD utilisateurs (ex-chauffeurs)
+  └── [id]/           # Actions utilisateur individuel
 /api/courses/          # CRUD courses
   └── [id]/assign/     # Assignation drag-and-drop
+/api/vehicules/        # CRUD véhicules
+  ├── [id]/           # Actions véhicule individuel
+  ├── with-assignations/ # Véhicules avec assignations actives
+  └── assignations/    # Gestion assignations véhicules
+    ├── assign/       # Création assignation
+    ├── robust/       # Récupération robuste
+    └── [id]/         # Actions assignation individuelle
 /api/analytics/        # APIs pour dashboard
   ├── courses-timeline/     # Données temporelles
-  ├── chauffeur-performance/ # Métriques chauffeurs
+  ├── chauffeur-performance/ # Métriques chauffeurs (30 jours)
   └── revenue-stats/         # Statistiques financières
 ```
 
@@ -105,13 +136,25 @@ pnpm run db:check             # Vérifier la stabilité de la DB
 ```
 src/components/
 ├── ui/                    # shadcn/ui base components
+│   ├── phone-input.tsx   # Composant téléphone français
+│   └── vehicle-combobox.tsx # Sélecteur véhicule
 ├── dashboard/
 │   ├── charts/           # Graphiques Recharts
 │   │   ├── CoursesTimeline.tsx
-│   │   ├── ChauffeurPerformance.tsx
+│   │   ├── ChauffeurPerformance.tsx (30 jours)
 │   │   └── RevenueChart.tsx
 │   └── metrics/          # Métriques business
-│       └── TopChauffeurs.tsx
+│       └── VehiculeAlerts.tsx
+├── effectifs/            # Gestion utilisateurs et véhicules
+│   ├── UserModal.tsx     # CRUD utilisateurs
+│   ├── DeleteUserModal.tsx
+│   ├── VehiculeAssignationModal.tsx
+│   ├── ChauffeurModal.tsx
+│   └── DeleteChauffeurModal.tsx
+├── vehicules/            # Gestion véhicules
+│   ├── VehiculeModal.tsx # CRUD véhicules complet
+│   ├── VehicleAssignModal.tsx
+│   └── DeleteVehiculeModal.tsx
 └── planning/             # Composants drag-and-drop
     ├── CourseCard.tsx
     ├── ChauffeurColumn.tsx
@@ -121,8 +164,9 @@ src/components/
 ### Base de Données
 - **Connection robuste** : `/src/lib/db.ts` avec retry automatique
 - **Client Prisma** : Pool de connexions avec reconnexion
-- **SQLite** : `prisma/dev.db` (development)
-- **Seeding** diversifié avec noms multiculturels
+- **SQLite** : `prisma/dev.db` (development, chemin fixe résolu)
+- **Seeding** avec noms d'acteurs français célèbres (toutes générations)
+- **Données complètes** : 10 utilisateurs, 10 véhicules, 50 clients, ~550 courses
 
 ## 🎨 Interface Utilisateur
 
@@ -189,21 +233,30 @@ src/components/
 ## 📋 État Actuel
 
 ### ✅ Fonctionnel
-- Dashboard complet avec analytics
-- CRUD toutes entités
-- Planning drag-and-drop  
-- Répertoire clients avec historique
-- APIs robustes avec retry
-- Interface responsive
+- **Dashboard complet** avec analytics et top chauffeurs (30 jours)
+- **CRUD toutes entités** : Utilisateurs, clients, véhicules, courses
+- **Système d'assignation** véhicules ↔ utilisateurs avec historique
+- **Planning drag-and-drop** avec courses sur 5 semaines
+- **Répertoire clients** avec historique et noms d'acteurs français
+- **Page paramètres** complète pour gestion utilisateurs/véhicules
+- **APIs robustes** avec retry automatique et gestion d'erreurs
+- **Interface responsive** avec dates complètes partout
 
 ### 🔄 En Cours / À Améliorer  
 - Quelques requêtes SQL à optimiser
-- Gestion d'erreurs à harmoniser
 - Tests automatisés à implémenter
 - Mode production à configurer
+- Optimisation des performances pour datasets plus larges
+
+### 🎬 Spécificités Françaises
+- **Noms d'acteurs français** : Plus de 140 noms d'acteurs célèbres
+- **Toutes générations** : Des années 30 (Gabin, Signoret) aux stars actuelles (Sy, Exarchopoulos)
+- **Diversité** : Acteurs d'origines diverses du cinéma français
+- **Interface française** : Dates, heures, statuts, messages d'erreur
 
 ---
 
-**Dernière mise à jour** : 29 janvier 2025
-**Stack** : Next.js 15 + TypeScript + SQLite + Tailwind + shadcn/ui + Recharts
-**Environnement** : Development avec pnpm + Node.js
+**Dernière mise à jour** : 13 août 2025  
+**Stack** : Next.js 15 + TypeScript + SQLite + Tailwind + shadcn/ui + Recharts  
+**Environnement** : Development avec pnpm + Node.js  
+**Base de données** : SQLite avec seeding complet d'acteurs français
