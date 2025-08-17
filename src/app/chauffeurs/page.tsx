@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge'
 import { PageHeader } from '@/components/page-header'
 import { Plus, Phone, Car, Edit, Trash2 } from 'lucide-react'
+import { getUserStatusBadge, getDefaultBadge } from '@/lib/badge-utils'
 
 interface Chauffeur {
   id: string
@@ -25,11 +26,7 @@ interface Chauffeur {
   }
 }
 
-const statutLabels = {
-  DISPONIBLE: { label: 'Disponible', color: 'bg-green-500' },
-  OCCUPE: { label: 'Occupé', color: 'bg-orange-500' },
-  HORS_SERVICE: { label: 'Hors service', color: 'bg-red-500' }
-}
+// Supprimé statutLabels - utilise maintenant getUserStatusBadge de badge-utils
 
 export default function ChauffeursPage() {
   const [chauffeurs, setChauffeurs] = useState<Chauffeur[]>([])
@@ -260,14 +257,18 @@ export default function ChauffeursPage() {
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center">
-                      <div className={`w-2 h-2 rounded-full mr-2 ${statutLabels[chauffeur.statut].color}`}></div>
-                      <Badge variant="outline">
-                        {statutLabels[chauffeur.statut].label}
+                      <Badge 
+                        variant={getUserStatusBadge(chauffeur.statut).variant}
+                        className={getUserStatusBadge(chauffeur.statut).className}
+                      >
+                        {chauffeur.statut === 'DISPONIBLE' ? 'Disponible' : 
+                         chauffeur.statut === 'OCCUPE' ? 'Occupé' :
+                         chauffeur.statut === 'HORS_SERVICE' ? 'Hors service' : chauffeur.statut}
                       </Badge>
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge variant="secondary">
+                    <Badge variant="secondary" className="text-xs font-medium px-2 py-1">
                       {chauffeur._count.courses} courses
                     </Badge>
                   </TableCell>

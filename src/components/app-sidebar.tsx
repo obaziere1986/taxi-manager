@@ -22,32 +22,40 @@ import {
   SidebarHeader,
   SidebarTrigger,
 } from "@/components/ui/sidebar"
+import { UserProfile } from "@/components/auth/UserProfile"
+import { ProtectedComponent } from "@/components/auth/ProtectedComponent"
 
 const items = [
   {
     title: "Dashboard",
     url: "/",
     icon: Home,
+    permissions: ["analytics.read"], // Tout le monde peut voir le dashboard
+    forEveryone: true
   },
   {
     title: "Planning",
     url: "/planning",
     icon: Calendar,
+    permissions: ["courses.read"], // Besoin de voir les courses
   },
   {
     title: "Clients",
     url: "/clients",
     icon: Users,
+    permissions: ["clients.read"], // Besoin de voir les clients
   },
   {
     title: "Courses",
     url: "/courses",
     icon: MapPin,
+    permissions: ["courses.read"], // Besoin de voir les courses
   },
   {
     title: "Paramètres",
     url: "/parametres",
     icon: Settings,
+    permissions: ["settings.read"], // Besoin d'accéder aux paramètres
   },
 ]
 
@@ -66,19 +74,25 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {items.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild isActive={pathname === item.url}>
-                    <a href={item.url}>
-                      <item.icon />
-                      <span>{item.title}</span>
-                    </a>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
+                <ProtectedComponent 
+                  key={item.title}
+                  permissions={item.forEveryone ? [] : item.permissions}
+                >
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild isActive={pathname === item.url}>
+                      <a href={item.url}>
+                        <item.icon />
+                        <span>{item.title}</span>
+                      </a>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                </ProtectedComponent>
               ))}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+      <UserProfile />
     </Sidebar>
   )
 }

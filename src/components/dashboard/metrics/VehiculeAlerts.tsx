@@ -1,10 +1,13 @@
 "use client"
 
 import { useState, useEffect } from 'react'
+import { useSession } from 'next-auth/react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { AlertTriangle, Car, Wrench, ExternalLink } from "lucide-react"
+import { AlertTriangle, Car, Wrench, ExternalLink, Calendar } from "lucide-react"
 import { getVehiculeAlerts, getAlertBadgeVariant } from '@/lib/vehicule-alerts'
+import { format } from 'date-fns'
+import { fr } from 'date-fns/locale'
 
 interface Vehicule {
   id: string
@@ -17,13 +20,79 @@ interface Vehicule {
   users?: Array<{ id: string; nom: string; prenom: string; role: string }>
 }
 
+interface VehiculeWithAssignation {
+  id: string
+  marque: string
+  modele: string
+  immatriculation: string
+  couleur?: string
+  annee?: number
+  prochaineVidange?: string
+  prochainEntretien?: string
+  prochainControleTechnique?: string
+  isAssigned: boolean
+  assignation?: {
+    id: string
+    dateDebut: string
+    assignedTo: string
+    assignedToRole: string
+    assignedToId: string
+  }
+}
+
 export function VehiculeAlerts() {
+  const { data: session } = useSession()
   const [vehicules, setVehicules] = useState<Vehicule[]>([])
+  const [vehiculeInfo, setVehiculeInfo] = useState<VehiculeWithAssignation | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetchVehicules()
-  }, [])
+    if (session) {
+      if (session.user?.role === 'Chauffeur') {
+        fetchChauffeurVehiculeInfo()
+      } else {
+        fetchVehicules()
+      }
+    }
+  }, [session])
+
+  const fetchChauffeurVehiculeInfo = async () => {
+    try {
+      setLoading(true)
+      const response = await fetch('/api/vehicules/with-assignations')
+      const data = await response.json()
+      
+      if (Array.isArray(data)) {
+        console.log('VehiculeAlerts - Session user ID:', session?.user?.id)
+        console.log('VehiculeAlerts - Véhicules avec assignations:', data)
+        
+        // Trouver le véhicule assigné au chauffeur connecté
+        const chauffeurVehicule = data.find(vehicule => 
+          vehicule.assignation?.assignedToRole === 'Chauffeur' &&
+          vehicule.assignation?.assignedToId === session?.user?.id
+        )
+        
+        console.log('VehiculeAlerts - Véhicule trouvé pour le chauffeur:', chauffeurVehicule)
+        
+        if (chauffeurVehicule) {
+          // Récupérer les détails complets avec les dates d'entretien
+          const detailsResponse = await fetch(`/api/vehicules/${chauffeurVehicule.id}`)
+          const vehiculeDetails = await detailsResponse.json()
+          
+          setVehiculeInfo({
+            ...chauffeurVehicule,
+            prochaineVidange: vehiculeDetails.prochaineVidange,
+            prochainEntretien: vehiculeDetails.prochainEntretien,
+            prochainControleTechnique: vehiculeDetails.prochainControleTechnique
+          })
+        }
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement des infos véhicule:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const fetchVehicules = async () => {
     try {
@@ -86,8 +155,8 @@ export function VehiculeAlerts() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5" />
-            Alertes véhicules
+            <Car className="h-5 w-5" />
+            {session?.user?.role === 'Chauffeur' ? 'Mon véhicule' : 'Alertes véhicules'}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -96,6 +165,137 @@ export function VehiculeAlerts() {
               <div key={i} className="h-16 bg-muted rounded"></div>
             ))}
           </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  // Vue spéciale pour les chauffeurs
+  if (session?.user?.role === 'Chauffeur') {
+    if (!vehiculeInfo) {
+      return (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Car className="h-5 w-5" />
+              Mon véhicule
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-center py-6 text-muted-foreground">
+              <Car className="h-12 w-12 mx-auto mb-4 opacity-20" />
+              <p className="text-sm">Aucun véhicule assigné</p>
+            </div>
+          </CardContent>
+        </Card>
+      )
+    }
+
+    const alerts = getVehiculeAlerts(vehiculeInfo)
+    
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Car className="h-5 w-5" />
+            Mon véhicule
+            {alerts.some(alert => alert.level === 'critical') && (
+              <Badge variant="destructive" className="animate-pulse ml-2">
+                {alerts.filter(alert => alert.level === 'critical').length} critique{alerts.filter(alert => alert.level === 'critical').length > 1 ? 's' : ''}
+              </Badge>
+            )}
+          </CardTitle>
+          <CardDescription>
+            Informations et entretien
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Informations véhicule */}
+          <div className="border rounded-lg p-4 bg-blue-50">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">{vehiculeInfo.marque} {vehiculeInfo.modele}</span>
+                <Badge variant="outline" className="text-xs font-medium px-2 py-1">
+                  {vehiculeInfo.immatriculation}
+                </Badge>
+              </div>
+              {vehiculeInfo.couleur && vehiculeInfo.annee && (
+                <p className="text-xs text-muted-foreground">
+                  {vehiculeInfo.couleur} • {vehiculeInfo.annee}
+                </p>
+              )}
+              {vehiculeInfo.assignation && (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Calendar className="h-3 w-3" />
+                  Assigné depuis le {format(new Date(vehiculeInfo.assignation.dateDebut), 'dd/MM/yyyy', { locale: fr })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Dates d'entretien */}
+          <div className="space-y-3">
+            <h4 className="text-sm font-medium">Prochaines échéances</h4>
+            
+            {vehiculeInfo.prochaineVidange && (
+              <div className="flex items-center justify-between p-2 rounded bg-muted/50">
+                <span className="text-sm">Vidange</span>
+                <Badge variant={
+                  alerts.find(a => a.message.includes('Vidange'))?.level === 'critical' ? 'destructive' :
+                  alerts.find(a => a.message.includes('Vidange'))?.level === 'danger' ? 'secondary' : 'outline'
+                }>
+                  {format(new Date(vehiculeInfo.prochaineVidange), 'dd/MM/yyyy', { locale: fr })}
+                </Badge>
+              </div>
+            )}
+            
+            {vehiculeInfo.prochainEntretien && (
+              <div className="flex items-center justify-between p-2 rounded bg-muted/50">
+                <span className="text-sm">Entretien</span>
+                <Badge variant={
+                  alerts.find(a => a.message.includes('Entretien'))?.level === 'critical' ? 'destructive' :
+                  alerts.find(a => a.message.includes('Entretien'))?.level === 'danger' ? 'secondary' : 'outline'
+                }>
+                  {format(new Date(vehiculeInfo.prochainEntretien), 'dd/MM/yyyy', { locale: fr })}
+                </Badge>
+              </div>
+            )}
+            
+            {vehiculeInfo.prochainControleTechnique && (
+              <div className="flex items-center justify-between p-2 rounded bg-muted/50">
+                <span className="text-sm">Contrôle technique</span>
+                <Badge variant={
+                  alerts.find(a => a.message.includes('Contrôle technique'))?.level === 'critical' ? 'destructive' :
+                  alerts.find(a => a.message.includes('Contrôle technique'))?.level === 'danger' ? 'secondary' : 'outline'
+                }>
+                  {format(new Date(vehiculeInfo.prochainControleTechnique), 'dd/MM/yyyy', { locale: fr })}
+                </Badge>
+              </div>
+            )}
+
+            {!vehiculeInfo.prochaineVidange && !vehiculeInfo.prochainEntretien && !vehiculeInfo.prochainControleTechnique && (
+              <p className="text-xs text-muted-foreground text-center py-2">
+                Aucune échéance programmée
+              </p>
+            )}
+          </div>
+
+          {/* Alertes critiques */}
+          {alerts.length > 0 && (
+            <div className="space-y-2">
+              <h4 className="text-sm font-medium text-orange-600">Alertes</h4>
+              {alerts.map((alert, index) => (
+                <Badge 
+                  key={index}
+                  variant={getAlertBadgeVariant(alert.level)} 
+                  className={`text-xs w-full justify-start ${alert.level === 'critical' ? 'animate-pulse' : ''}`}
+                >
+                  <Wrench className="h-3 w-3 mr-2" />
+                  {alert.message}
+                </Badge>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
     )

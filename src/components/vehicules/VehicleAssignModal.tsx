@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
+import { getDefaultBadge } from '@/lib/badge-utils'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Car, User, Check, ChevronDown, Shield, UserRound } from 'lucide-react'
@@ -134,7 +135,10 @@ export function VehicleAssignModal({
       case 'Admin': return <Badge variant="destructive">Admin</Badge>
       case 'Planner': return <Badge variant="default">Planner</Badge>
       case 'Chauffeur': return <Badge variant="secondary">Chauffeur</Badge>
-      default: return <Badge variant="outline">{role}</Badge>
+      default: {
+        const badgeStyle = getDefaultBadge()
+        return <Badge variant={badgeStyle.variant} className={badgeStyle.className}>{role}</Badge>
+      }
     }
   }
 
@@ -161,7 +165,7 @@ export function VehicleAssignModal({
               <span className="font-medium">
                 {vehicule.marque} {vehicule.modele}
               </span>
-              <Badge variant="outline">
+              <Badge variant="secondary" className="text-xs font-medium px-2 py-1">
                 {vehicule.immatriculation}
               </Badge>
             </div>

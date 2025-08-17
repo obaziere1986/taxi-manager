@@ -4,6 +4,7 @@ import { useDraggable } from '@dnd-kit/core'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { MapPin, Clock, User } from 'lucide-react'
+import { getCourseStatusBadge, getDefaultBadge } from '@/lib/badge-utils'
 
 interface CourseCardProps {
   course: {
@@ -23,13 +24,7 @@ interface CourseCardProps {
   }
 }
 
-const statutColors = {
-  EN_ATTENTE: 'bg-gray-100 border-gray-300',
-  ASSIGNEE: 'bg-blue-100 border-blue-300',
-  EN_COURS: 'bg-orange-100 border-orange-300',
-  TERMINEE: 'bg-green-100 border-green-300',
-  ANNULEE: 'bg-red-100 border-red-300'
-}
+// Supprimé statutColors - utilise maintenant le système unifié de badge-utils
 
 export function CourseCard({ course }: CourseCardProps) {
   const {
@@ -52,19 +47,20 @@ export function CourseCard({ course }: CourseCardProps) {
       style={style}
       {...listeners}
       {...attributes}
-      className={`cursor-move transition-all hover:shadow-md ${
-        statutColors[course.statut as keyof typeof statutColors] || 'bg-gray-100'
-      } ${isDragging ? 'opacity-50 rotate-3 scale-105' : ''}`}
+      className={`cursor-move transition-all hover:shadow-md ${isDragging ? 'opacity-50 rotate-3 scale-105' : ''}`}
     >
       <CardContent className="p-3">
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <Badge variant="outline" className="text-xs">
-              {new Date(course.dateHeure).toLocaleTimeString('fr-FR', {
-                hour: '2-digit',
-                minute: '2-digit'
-              })}
-            </Badge>
+            (() => {
+              const badgeStyle = getDefaultBadge()
+              return <Badge variant={badgeStyle.variant} className={`${badgeStyle.className} text-xs`}>
+                {new Date(course.dateHeure).toLocaleTimeString('fr-FR', {
+                  hour: '2-digit',
+                  minute: '2-digit'
+                })}
+              </Badge>
+            })()
           </div>
           
           <div className="space-y-1">

@@ -1,0 +1,119 @@
+"use client"
+
+import { useState } from 'react'
+import { signIn, getSession } from 'next-auth/react'
+import { useRouter } from 'next/navigation'
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+
+export default function LoginPage() {
+  const router = useRouter()
+  const [formData, setFormData] = useState({
+    login: '',
+    password: ''
+  })
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    setError('')
+
+    try {
+      const result = await signIn('credentials', {
+        login: formData.login,
+        password: formData.password,
+        redirect: false
+      })
+
+      if (result?.error) {
+        setError('Identifiants incorrects. Veuillez réessayer.')
+      } else {
+        // Vérifier la session et rediriger
+        const session = await getSession()
+        if (session) {
+          router.push('/')
+          router.refresh()
+        }
+      }
+    } catch (error) {
+      console.error('Erreur de connexion:', error)
+      setError('Une erreur est survenue. Veuillez réessayer.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target
+    setFormData(prev => ({ ...prev, [name]: value }))
+  }
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <Card className="w-full max-w-md">
+        <CardHeader className="space-y-1">
+          <CardTitle className="text-2xl font-bold text-center">
+            Taxi Manager
+          </CardTitle>
+          <CardDescription className="text-center">
+            Connectez-vous à votre compte
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="login">Login ou Email</Label>
+              <Input
+                id="login"
+                name="login"
+                type="text"
+                placeholder="Votre login ou email"
+                value={formData.login}
+                onChange={handleChange}
+                required
+                disabled={loading}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="password">Mot de passe</Label>
+              <Input
+                id="password"
+                name="password"
+                type="password"
+                placeholder="Votre mot de passe"
+                value={formData.password}
+                onChange={handleChange}
+                required
+                disabled={loading}
+              />
+            </div>
+            
+            {error && (
+              <Alert variant="destructive">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+            
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? 'Connexion...' : 'Se connecter'}
+            </Button>
+          </form>
+          
+          <div className="mt-6 text-center text-sm text-gray-600">
+            <p>Comptes de test disponibles :</p>
+            <div className="mt-2 space-y-1 text-xs">
+              <p><strong>Admin:</strong> admin / admin123</p>
+              <p><strong>Planner:</strong> planner / planner123</p>
+              <p><strong>Chauffeur:</strong> daniel / chauffeur123</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}

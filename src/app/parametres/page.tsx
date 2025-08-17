@@ -1,11 +1,13 @@
 "use client"
 
 import { useState, useEffect } from 'react'
+import { useSession } from 'next-auth/react'
 import { PageHeader } from '@/components/page-header'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { getRoleBadge, getUserStatusBadge, getAssignationBadge, UNIFORM_BADGE_CLASSES } from '@/lib/badge-utils'
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -24,6 +26,7 @@ import {
   Phone,
   Mail,
   Shield,
+  ShieldCheck,
   User,
   Calendar,
   Fuel,
@@ -31,7 +34,10 @@ import {
   History,
   ArrowRight,
   UserPlus,
-  UserRoundMinus
+  UserRoundMinus,
+  Camera,
+  Bell,
+  Save
 } from "lucide-react"
 import { VehiculeModal } from '@/components/vehicules/VehiculeModal'
 import { DeleteVehiculeModal } from '@/components/vehicules/DeleteVehiculeModal'
@@ -40,6 +46,7 @@ import { DeleteUserModal } from '@/components/effectifs/DeleteUserModal'
 import { VehiculeAssignationModal } from '@/components/effectifs/VehiculeAssignationModal'
 import { VehicleAssignModal } from '@/components/vehicules/VehicleAssignModal'
 import { getVehiculeAlerts, getAlertBadgeVariant } from '@/lib/vehicule-alerts'
+import { ProtectedComponent } from '@/components/auth/ProtectedComponent'
 
 interface Vehicule {
   id: string
@@ -132,7 +139,8 @@ interface CombinedUser {
 }
 
 export default function ParametresPage() {
-  const [activeTab, setActiveTab] = useState("vehicules")
+  const { data: session } = useSession()
+  const [activeTab, setActiveTab] = useState("profil")
   const [vehicules, setVehicules] = useState<Vehicule[]>([])
   const [assignations, setAssignations] = useState<VehiculeAssignation[]>([])
   const [users, setUsers] = useState<User[]>([])
@@ -489,24 +497,51 @@ export default function ParametresPage() {
 
       <div className="flex-1 p-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="vehicules" className="flex items-center gap-2">
-              <Car className="h-4 w-4" />
-              Véhicules
-            </TabsTrigger>
-            <TabsTrigger value="effectifs" className="flex items-center gap-2">
-              <Users className="h-4 w-4" />
-              Effectifs
-            </TabsTrigger>
-            <TabsTrigger value="preferences" className="flex items-center gap-2">
-              <Settings className="h-4 w-4" />
-              Préférences
-            </TabsTrigger>
-          </TabsList>
+          {/* Cacher les onglets pour les chauffeurs qui n'ont que le profil */}
+          {session?.user?.role !== 'Chauffeur' && (
+            <TabsList className={`grid w-full ${
+              session?.user?.role === 'Admin' ? 'grid-cols-5' : 'grid-cols-3'
+            }`}>
+              <TabsTrigger value="profil" className="flex items-center gap-2">
+                <User className="h-4 w-4" />
+                Mon Profil
+              </TabsTrigger>
+              <ProtectedComponent permissions={["vehicles.read"]}>
+                <TabsTrigger value="vehicules" className="flex items-center gap-2">
+                  <Car className="h-4 w-4" />
+                  Véhicules
+                </TabsTrigger>
+              </ProtectedComponent>
+              <ProtectedComponent permissions={["users.read"]}>
+                <TabsTrigger value="effectifs" className="flex items-center gap-2">
+                  <Users className="h-4 w-4" />
+                  Effectifs
+                </TabsTrigger>
+              </ProtectedComponent>
+              {session?.user?.role === 'Admin' && (
+                <TabsTrigger value="preferences" className="flex items-center gap-2">
+                  <Settings className="h-4 w-4" />
+                  Préférences
+                </TabsTrigger>
+              )}
+              {session?.user?.role === 'Admin' && (
+                <TabsTrigger value="permissions" className="flex items-center gap-2">
+                  <ShieldCheck className="h-4 w-4" />
+                  Permissions
+                </TabsTrigger>
+              )}
+            </TabsList>
+          )}
+
+          {/* Section Profil */}
+          <TabsContent value="profil" className="space-y-6">
+            <ProfilSection />
+          </TabsContent>
 
           {/* Section Véhicules */}
-          <TabsContent value="vehicules" className="space-y-6">
-            <Card>
+          <ProtectedComponent permissions={["vehicles.read"]}>
+            <TabsContent value="vehicules" className="space-y-6">
+              <Card>
               <CardHeader>
                 <div className="flex justify-between items-center">
                   <div>
@@ -556,7 +591,10 @@ export default function ParametresPage() {
                                   <h3 className="font-semibold">
                                     {vehicule.marque} {vehicule.modele}
                                   </h3>
-                                  <Badge variant={vehicule.actif ? "default" : "secondary"}>
+                                  <Badge 
+                                    variant={vehicule.actif ? "default" : "secondary"} 
+                                    className="text-xs font-medium px-2 py-1"
+                                  >
                                     {vehicule.actif ? "Actif" : "Inactif"}
                                   </Badge>
                                   {alerts.map((alert, index) => (
@@ -727,12 +765,18 @@ export default function ParametresPage() {
                                       `${assignation.user.nom.toUpperCase()}, ${assignation.user.prenom}`
                                     }
                                   </span>
-                                  <Badge variant="outline" className="ml-2">
+                                  <Badge 
+                                    variant="outline" 
+                                    className="text-xs font-medium px-2 py-1 ml-2"
+                                  >
                                     {assignation.chauffeur ? 'Chauffeur' : assignation.user?.role}
                                   </Badge>
                                 </div>
                                 
-                                <Badge variant={assignation.actif ? "default" : "secondary"}>
+                                <Badge 
+                                  variant={assignation.actif ? "default" : "secondary"} 
+                                  className="text-xs font-medium px-2 py-1"
+                                >
                                   {assignation.actif ? "Actif" : "Terminé"}
                                 </Badge>
                               </div>
@@ -768,9 +812,11 @@ export default function ParametresPage() {
               </CardContent>
             </Card>
           </TabsContent>
+          </ProtectedComponent>
 
           {/* Section Effectifs */}
-          <TabsContent value="effectifs" className="space-y-6">
+          <ProtectedComponent permissions={["users.read"]}>
+            <TabsContent value="effectifs" className="space-y-6">
             <Card>
               <CardHeader>
                 <div className="flex justify-between items-center">
@@ -783,10 +829,13 @@ export default function ParametresPage() {
                       Gérer tous les utilisateurs : admins, planneurs et chauffeurs
                     </CardDescription>
                   </div>
-                  <Button onClick={() => setUserModal({ isOpen: true, mode: 'create', user: null })}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Nouvel utilisateur
-                  </Button>
+                  {/* Seuls les Admins peuvent créer des utilisateurs */}
+                  {session?.user?.role === 'Admin' && (
+                    <Button onClick={() => setUserModal({ isOpen: true, mode: 'create', user: null })}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Nouvel utilisateur
+                    </Button>
+                  )}
                 </div>
               </CardHeader>
               <CardContent>
@@ -817,23 +866,19 @@ export default function ParametresPage() {
                           }
                         }
 
-                        const getRoleBadge = (role: string) => {
-                          switch (role) {
-                            case 'Admin': return <Badge variant="destructive">Admin</Badge>
-                            case 'Planner': return <Badge variant="default">Planner</Badge>
-                            case 'Chauffeur': return <Badge variant="secondary">Chauffeur</Badge>
-                            default: return <Badge variant="outline">{role}</Badge>
-                          }
+                        const getRoleDisplay = (role: string) => {
+                          const badgeStyle = getRoleBadge(role)
+                          return <Badge variant={badgeStyle.variant} className={badgeStyle.className}>{role}</Badge>
                         }
 
-                        const getStatutBadge = (statut?: string) => {
+                        const getStatutDisplay = (statut?: string) => {
                           if (!statut) return null
-                          switch (statut) {
-                            case 'DISPONIBLE': return <Badge variant="default" className="bg-green-100 text-green-800 ml-2">Disponible</Badge>
-                            case 'OCCUPE': return <Badge variant="secondary" className="bg-orange-100 text-orange-800 ml-2">Occupé</Badge>
-                            case 'HORS_SERVICE': return <Badge variant="outline" className="bg-red-100 text-red-800 ml-2">Hors service</Badge>
-                            default: return null
-                          }
+                          const badgeStyle = getUserStatusBadge(statut)
+                          return <Badge variant={badgeStyle.variant} className={badgeStyle.className}>{
+                            statut === 'DISPONIBLE' ? 'Disponible' : 
+                            statut === 'OCCUPE' ? 'Occupé' :
+                            statut === 'HORS_SERVICE' ? 'Hors service' : statut
+                          }</Badge>
                         }
 
                         return (
@@ -845,9 +890,16 @@ export default function ParametresPage() {
                                   <h3 className="font-semibold">
                                     {person.nom.toUpperCase()}, {person.prenom}
                                   </h3>
-                                  {getRoleBadge(person.role)}
-                                  {getStatutBadge(person.statut)}
-                                  {!person.actif && <Badge variant="outline" className="ml-2">Inactif</Badge>}
+                                  {getRoleDisplay(person.role)}
+                                  {getStatutDisplay(person.statut)}
+                                  {!person.actif && (
+                                    <Badge 
+                                      variant="secondary" 
+                                      className="text-xs font-medium px-2 py-1 ml-2"
+                                    >
+                                      Inactif
+                                    </Badge>
+                                  )}
                                 </div>
                                 <div className="space-y-1">
                                   <p className="text-sm text-muted-foreground flex items-center flex-wrap gap-x-2">
@@ -879,26 +931,33 @@ export default function ParametresPage() {
                                 >
                                   <Car className="h-4 w-4" />
                                 </Button>
-                                <Button 
-                                  variant="outline" 
-                                  size="sm"
-                                  onClick={() => {
-                                    const user = users.find(u => u.id === person.id)
-                                    setUserModal({ isOpen: true, mode: 'edit', user })
-                                  }}
-                                >
-                                  <Edit className="h-4 w-4" />
-                                </Button>
-                                <Button 
-                                  variant="outline" 
-                                  size="sm"
-                                  onClick={() => {
-                                    const user = users.find(u => u.id === person.id)
-                                    setDeleteUserModal({ isOpen: true, user })
-                                  }}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
+                                {/* Empêcher les Planners de modifier les Admins */}
+                                {(session?.user?.role === 'Admin' || 
+                                  (session?.user?.role === 'Planner' && person.role !== 'Admin')) && (
+                                  <Button 
+                                    variant="outline" 
+                                    size="sm"
+                                    onClick={() => {
+                                      const user = users.find(u => u.id === person.id)
+                                      setUserModal({ isOpen: true, mode: 'edit', user })
+                                    }}
+                                  >
+                                    <Edit className="h-4 w-4" />
+                                  </Button>
+                                )}
+                                {/* Seuls les Admins peuvent supprimer des utilisateurs */}
+                                {session?.user?.role === 'Admin' && (
+                                  <Button 
+                                    variant="outline" 
+                                    size="sm"
+                                    onClick={() => {
+                                      const user = users.find(u => u.id === person.id)
+                                      setDeleteUserModal({ isOpen: true, user })
+                                    }}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -910,6 +969,7 @@ export default function ParametresPage() {
               </CardContent>
             </Card>
           </TabsContent>
+          </ProtectedComponent>
 
           {/* Section Préférences */}
           <TabsContent value="preferences" className="space-y-6">
@@ -1200,15 +1260,21 @@ export default function ParametresPage() {
                     <div className="space-y-2 text-sm">
                       <div className="flex items-center justify-between">
                         <span>Confirmation de course</span>
-                        <Badge variant="outline">Désactivé</Badge>
+                        <Badge variant="secondary" className="text-xs font-medium px-2 py-1">
+                          Désactivé
+                        </Badge>
                       </div>
                       <div className="flex items-center justify-between">
                         <span>Arrivée du chauffeur</span>
-                        <Badge variant="outline">Désactivé</Badge>
+                        <Badge variant="secondary" className="text-xs font-medium px-2 py-1">
+                          Désactivé
+                        </Badge>
                       </div>
                       <div className="flex items-center justify-between">
                         <span>Fin de course</span>
-                        <Badge variant="outline">Désactivé</Badge>
+                        <Badge variant="secondary" className="text-xs font-medium px-2 py-1">
+                          Désactivé
+                        </Badge>
                       </div>
                     </div>
                   </div>
@@ -1294,6 +1360,13 @@ export default function ParametresPage() {
               </CardContent>
             </Card>
           </TabsContent>
+
+          {/* Section Permissions (Admin uniquement) */}
+          {session?.user?.role === 'Admin' && (
+            <TabsContent value="permissions" className="space-y-6">
+              <PermissionsSection />
+            </TabsContent>
+          )}
         </Tabs>
       </div>
       
@@ -1346,6 +1419,548 @@ export default function ParametresPage() {
         onAssign={handleAssignVehicule}
         vehicule={vehicleAssignModal.vehicule}
       />
+    </div>
+  )
+}
+
+// Composant pour la section Profil
+function ProfilSection() {
+  const { data: session, update } = useSession()
+  const [isLoading, setIsLoading] = useState(false)
+  const [isLoadingProfile, setIsLoadingProfile] = useState(true)
+  const [formData, setFormData] = useState({
+    nom: '',
+    prenom: '',
+    email: '',
+    telephone: '',
+    notificationsEmail: true,
+    notificationsSMS: false,
+    notificationsDesktop: true,
+    avatarUrl: ''
+  })
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
+
+  // Charger les données du profil depuis l'API
+  useEffect(() => {
+    const fetchProfile = async () => {
+      if (!session?.user) return
+      
+      try {
+        setIsLoadingProfile(true)
+        const response = await fetch('/api/users/profile')
+        
+        if (response.ok) {
+          const profileData = await response.json()
+          setFormData({
+            nom: profileData.nom || '',
+            prenom: profileData.prenom || '',
+            email: profileData.email || '',
+            telephone: profileData.telephone || '',
+            notificationsEmail: profileData.notificationsEmail ?? true,
+            notificationsSMS: profileData.notificationsSMS ?? false,
+            notificationsDesktop: profileData.notificationsDesktop ?? true,
+            avatarUrl: profileData.avatarUrl || ''
+          })
+        } else {
+          console.error('Erreur lors du chargement du profil')
+        }
+      } catch (error) {
+        console.error('Erreur lors du chargement du profil:', error)
+      } finally {
+        setIsLoadingProfile(false)
+      }
+    }
+
+    fetchProfile()
+  }, [session])
+
+  const handleInputChange = (field: string, value: string | boolean) => {
+    setFormData(prev => ({ ...prev, [field]: value }))
+  }
+
+  const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    setIsUploadingAvatar(true)
+    try {
+      const formData = new FormData()
+      formData.append('avatar', file)
+
+      const response = await fetch('/api/users/avatar', {
+        method: 'POST',
+        body: formData
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        setFormData(prev => ({ ...prev, avatarUrl: result.avatarUrl }))
+        
+        // Mettre à jour la session NextAuth
+        await update({
+          ...session,
+          user: {
+            ...session?.user,
+            avatarUrl: result.avatarUrl
+          }
+        })
+        
+        alert('Photo de profil mise à jour avec succès !')
+      } else {
+        const error = await response.json()
+        alert(`Erreur: ${error.error}`)
+      }
+    } catch (error) {
+      console.error('Erreur upload avatar:', error)
+      alert('Erreur lors de l\'upload de l\'image')
+    } finally {
+      setIsUploadingAvatar(false)
+      // Reset input file
+      event.target.value = ''
+    }
+  }
+
+  const handleRemoveAvatar = async () => {
+    setIsUploadingAvatar(true)
+    try {
+      const response = await fetch('/api/users/avatar', {
+        method: 'DELETE'
+      })
+
+      if (response.ok) {
+        setFormData(prev => ({ ...prev, avatarUrl: '' }))
+        
+        // Mettre à jour la session NextAuth
+        await update({
+          ...session,
+          user: {
+            ...session?.user,
+            avatarUrl: null
+          }
+        })
+        
+        alert('Photo de profil supprimée')
+      } else {
+        alert('Erreur lors de la suppression')
+      }
+    } catch (error) {
+      console.error('Erreur suppression avatar:', error)
+      alert('Erreur lors de la suppression')
+    } finally {
+      setIsUploadingAvatar(false)
+    }
+  }
+
+  const handleSaveProfile = async () => {
+    setIsLoading(true)
+    try {
+      const response = await fetch('/api/users/profile', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData)
+      })
+
+      if (response.ok) {
+        const updatedProfile = await response.json()
+        
+        // Mettre à jour la session avec les nouvelles données
+        await update({
+          name: `${updatedProfile.prenom} ${updatedProfile.nom}`,
+          email: updatedProfile.email
+        })
+        
+        alert('Profil sauvegardé avec succès !')
+      } else {
+        const errorData = await response.json()
+        alert(`Erreur: ${errorData.error}`)
+      }
+    } catch (error) {
+      console.error('Erreur sauvegarde:', error)
+      alert('Erreur lors de la sauvegarde')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  if (!session?.user || isLoadingProfile) {
+    return (
+      <Card>
+        <CardContent className="p-6">
+          <p>Chargement du profil...</p>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  const firstName = session.user.name?.split(' ')[0] || 'Utilisateur'
+  const initials = `${session.user.name?.split(' ')[0]?.[0] || ''}${session.user.name?.split(' ')[1]?.[0] || ''}`.toUpperCase()
+
+  return (
+    <div className="space-y-6">
+      {/* Informations personnelles */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <User className="h-5 w-5" />
+            Mon Profil
+          </CardTitle>
+          <CardDescription>
+            Gérez vos informations personnelles et vos préférences
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* Photo de profil */}
+          <div className="flex items-center gap-6">
+            <div className="relative">
+              {formData.avatarUrl ? (
+                <img
+                  src={formData.avatarUrl}
+                  alt="Photo de profil"
+                  className="w-20 h-20 rounded-full object-cover border-2 border-border"
+                />
+              ) : (
+                <div className="w-20 h-20 rounded-full bg-muted border-2 border-border flex items-center justify-center text-foreground font-bold text-xl">
+                  {initials}
+                </div>
+              )}
+              <Button
+                size="sm"
+                className="absolute -bottom-2 -right-2 h-8 w-8 rounded-full"
+                disabled={isUploadingAvatar}
+                onClick={() => document.getElementById('avatar-input')?.click()}
+              >
+                <Camera className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="flex-1">
+              <h3 className="text-lg font-medium">Photo de profil</h3>
+              <p className="text-sm text-muted-foreground mb-3">
+                Ajoutez une photo pour personnaliser votre profil (JPG, PNG, WebP - max 5MB)
+              </p>
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  disabled={isUploadingAvatar}
+                  onClick={() => document.getElementById('avatar-input')?.click()}
+                >
+                  <Camera className="h-4 w-4 mr-2" />
+                  {isUploadingAvatar ? 'Upload...' : 'Changer la photo'}
+                </Button>
+                {formData.avatarUrl && (
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    disabled={isUploadingAvatar}
+                    onClick={handleRemoveAvatar}
+                  >
+                    Supprimer
+                  </Button>
+                )}
+              </div>
+              <input
+                id="avatar-input"
+                type="file"
+                accept="image/*"
+                onChange={handleAvatarUpload}
+                className="hidden"
+              />
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* Informations de base */}
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="prenom">Prénom</Label>
+              <Input
+                id="prenom"
+                value={formData.prenom}
+                onChange={(e) => handleInputChange('prenom', e.target.value)}
+                placeholder="Votre prénom"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="nom">Nom</Label>
+              <Input
+                id="nom"
+                value={formData.nom}
+                onChange={(e) => handleInputChange('nom', e.target.value)}
+                placeholder="Votre nom"
+              />
+            </div>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="email">Adresse email</Label>
+              <Input
+                id="email"
+                type="email"
+                value={formData.email}
+                onChange={(e) => handleInputChange('email', e.target.value)}
+                placeholder="votre.email@example.com"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="telephone">Numéro de téléphone</Label>
+              <Input
+                id="telephone"
+                type="tel"
+                value={formData.telephone}
+                onChange={(e) => handleInputChange('telephone', e.target.value)}
+                placeholder="06 12 34 56 78"
+              />
+            </div>
+          </div>
+
+          <div className="bg-muted/20 p-3 rounded-md">
+            <div className="flex items-center gap-2 mb-1">
+              <Shield className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-medium">Rôle: {session.user.role}</span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Votre rôle détermine vos permissions dans l'application
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Préférences de notifications */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Bell className="h-5 w-5" />
+            Préférences de notifications
+          </CardTitle>
+          <CardDescription>
+            Choisissez comment vous souhaitez être notifié
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label className="text-base">Notifications par email</Label>
+              <p className="text-sm text-muted-foreground">
+                Recevoir les alertes importantes par email
+              </p>
+            </div>
+            <Switch
+              checked={formData.notificationsEmail}
+              onCheckedChange={(checked) => handleInputChange('notificationsEmail', checked)}
+            />
+          </div>
+
+          <Separator />
+
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label className="text-base">Notifications SMS</Label>
+              <p className="text-sm text-muted-foreground">
+                Recevoir les alertes urgentes par SMS
+              </p>
+            </div>
+            <Switch
+              checked={formData.notificationsSMS}
+              onCheckedChange={(checked) => handleInputChange('notificationsSMS', checked)}
+            />
+          </div>
+
+          <Separator />
+
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label className="text-base">Notifications bureau</Label>
+              <p className="text-sm text-muted-foreground">
+                Afficher les notifications dans le navigateur
+              </p>
+            </div>
+            <Switch
+              checked={formData.notificationsDesktop}
+              onCheckedChange={(checked) => handleInputChange('notificationsDesktop', checked)}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Actions */}
+      <div className="flex justify-end">
+        <Button onClick={handleSaveProfile} disabled={isLoading}>
+          <Save className="h-4 w-4 mr-2" />
+          {isLoading ? 'Sauvegarde...' : 'Sauvegarder les modifications'}
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+// Composant pour la section Permissions (Admin uniquement)
+function PermissionsSection() {
+  const [permissions, setPermissions] = useState<any>({})
+  const [rolePermissions, setRolePermissions] = useState<any>({})
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    loadPermissions()
+  }, [])
+
+  const loadPermissions = async () => {
+    try {
+      setLoading(true)
+      const response = await fetch('/api/permissions')
+      if (response.ok) {
+        const data = await response.json()
+        setPermissions(data.permissions)
+        setRolePermissions(data.rolePermissions)
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement des permissions:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const updateRolePermissions = async (role: string, permissionName: string, isActive: boolean) => {
+    try {
+      setSaving(true)
+      const updatedPermissions = {
+        ...rolePermissions[role],
+        [permissionName]: isActive
+      }
+
+      const response = await fetch(`/api/permissions/${role}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ permissions: updatedPermissions })
+      })
+
+      if (response.ok) {
+        setRolePermissions(prev => ({
+          ...prev,
+          [role]: updatedPermissions
+        }))
+      } else {
+        throw new Error('Erreur lors de la mise à jour')
+      }
+    } catch (error) {
+      console.error('Erreur:', error)
+      alert('Erreur lors de la mise à jour des permissions')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const getRoleLabel = (role: string) => {
+    switch (role) {
+      case 'Admin': return 'Administrateur'
+      case 'Planner': return 'Planificateur'
+      case 'Chauffeur': return 'Chauffeur'
+      default: return role
+    }
+  }
+
+  const getModuleLabel = (module: string) => {
+    switch (module) {
+      case 'users': return 'Utilisateurs'
+      case 'vehicles': return 'Véhicules'
+      case 'courses': return 'Courses'
+      case 'clients': return 'Clients'
+      case 'analytics': return 'Analytics'
+      case 'settings': return 'Paramètres'
+      case 'permissions': return 'Permissions'
+      default: return module
+    }
+  }
+
+  const getActionLabel = (action: string) => {
+    switch (action) {
+      case 'create': return 'Créer'
+      case 'read': return 'Voir'
+      case 'update': return 'Modifier'
+      case 'delete': return 'Supprimer'
+      case 'assign': return 'Assigner'
+      case 'manage': return 'Gérer'
+      default: return action
+    }
+  }
+
+  if (loading) {
+    return (
+      <Card>
+        <CardContent className="flex items-center justify-center py-8">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Chargement des permissions...</p>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <ShieldCheck className="h-5 w-5" />
+            Gestion des permissions par rôle
+          </CardTitle>
+          <CardDescription>
+            Configurez les droits d'accès pour chaque rôle utilisateur.
+            <br />
+            <strong>Note :</strong> Les permissions Admin ne peuvent pas être modifiées.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-6">
+            {['Planner', 'Chauffeur'].map(role => (
+              <div key={role} className="border rounded-lg p-4">
+                <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                  <Users className="h-5 w-5" />
+                  {getRoleLabel(role)}
+                </h3>
+                
+                <div className="space-y-4">
+                  {Object.entries(permissions).map(([module, modulePermissions]: [string, any]) => (
+                    <div key={module} className="border-l-4 border-muted pl-4">
+                      <h4 className="font-medium text-sm text-muted-foreground mb-2 uppercase tracking-wide">
+                        {getModuleLabel(module)}
+                      </h4>
+                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                        {modulePermissions.map((permission: any) => {
+                          const isActive = rolePermissions[role]?.[permission.nom] || false
+                          return (
+                            <div key={permission.nom} className="flex items-center space-x-2">
+                              <Switch
+                                id={`${role}-${permission.nom}`}
+                                checked={isActive}
+                                onCheckedChange={(checked) => 
+                                  updateRolePermissions(role, permission.nom, checked)
+                                }
+                                disabled={saving}
+                              />
+                              <Label 
+                                htmlFor={`${role}-${permission.nom}`}
+                                className="text-sm cursor-pointer"
+                              >
+                                {getActionLabel(permission.action)}
+                              </Label>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }

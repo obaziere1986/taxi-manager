@@ -42,8 +42,11 @@ export function categorizeCourses(courses: Course[]): {
     {
       id: 'aujourd-hui',
       title: 'Aujourd\'hui',
-      description: 'Courses d\'aujourd\'hui',
-      courses: coursesAVenir.filter(course => isToday(new Date(course.dateHeure))),
+      description: 'Courses d\'aujourd\'hui à venir ou en cours',
+      courses: courses.filter(course => 
+        isToday(new Date(course.dateHeure)) && 
+        !['TERMINEE', 'ANNULEE'].includes(course.statut)
+      ),
       count: 0
     },
     {
@@ -124,6 +127,16 @@ export function categorizeCourses(courses: Course[]): {
 
   // Catégories passées
   const passees: CourseCategory[] = [
+    {
+      id: 'aujourd-hui-terminees',
+      title: 'Aujourd\'hui - Terminées',
+      description: 'Courses terminées aujourd\'hui',
+      courses: courses.filter(course => 
+        isToday(new Date(course.dateHeure)) && 
+        ['TERMINEE', 'ANNULEE'].includes(course.statut)
+      ),
+      count: 0
+    },
     {
       id: 'hier',
       title: 'Hier',

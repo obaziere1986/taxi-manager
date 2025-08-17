@@ -3,6 +3,7 @@
 import { useDroppable } from '@dnd-kit/core'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { getDefaultBadge } from '@/lib/badge-utils'
 import { CourseCard } from './course-card'
 import { Car, Phone } from 'lucide-react'
 
@@ -39,10 +40,13 @@ export function ChauffeurColumn({ chauffeur, courses }: ChauffeurColumnProps) {
           <CardTitle className="text-sm font-medium">{chauffeur.prenom} {chauffeur.nom.toUpperCase()}</CardTitle>
           <div className="flex items-center">
             <div className={`w-2 h-2 rounded-full mr-2 ${statutColors[chauffeur.statut as keyof typeof statutColors]}`}></div>
-            <Badge variant="outline" className="text-xs">
-              {chauffeur.statut === 'DISPONIBLE' ? 'Disponible' :
-               chauffeur.statut === 'OCCUPE' ? 'Occupé' : 'Hors service'}
-            </Badge>
+            (() => {
+              const badgeStyle = getDefaultBadge()
+              return <Badge variant={badgeStyle.variant} className={`${badgeStyle.className} text-xs`}>
+                {chauffeur.statut === 'DISPONIBLE' ? 'Disponible' :
+                 chauffeur.statut === 'OCCUPE' ? 'Occupé' : 'Hors service'}
+              </Badge>
+            })()
           </div>
         </div>
         

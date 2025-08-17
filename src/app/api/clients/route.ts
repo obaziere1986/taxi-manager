@@ -17,7 +17,6 @@ export async function GET() {
               destination: true,
               dateHeure: true,
               statut: true,
-              prix: true,
               notes: true
             },
             orderBy: {

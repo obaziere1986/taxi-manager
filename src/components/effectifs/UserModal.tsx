@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from 'react'
+import { useSession } from 'next-auth/react'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -29,6 +30,7 @@ interface UserModalProps {
 }
 
 export function UserModal({ isOpen, onClose, onSave, user, mode }: UserModalProps) {
+  const { data: session } = useSession()
   const [formData, setFormData] = useState<Partial<User>>({
     nom: '',
     prenom: '',
@@ -39,6 +41,17 @@ export function UserModal({ isOpen, onClose, onSave, user, mode }: UserModalProp
     actif: true
   })
   const [loading, setLoading] = useState(false)
+
+  // Logique de restrictions de rôles
+  const isAdmin = session?.user?.role === 'Admin'
+  const isPlanner = session?.user?.role === 'Planner'
+  const isEditingAdmin = user && user.role === 'Admin'
+  
+  // Les planners ne peuvent pas modifier les admins
+  const canEditUser = isAdmin || (isPlanner && !isEditingAdmin)
+  
+  // Les planners ne peuvent pas modifier les rôles
+  const canModifyRole = isAdmin
 
   useEffect(() => {
     if (mode === 'edit' && user) {
@@ -143,16 +156,29 @@ export function UserModal({ isOpen, onClose, onSave, user, mode }: UserModalProp
 
           <div className="space-y-2">
             <Label htmlFor="role">Rôle</Label>
-            <Select value={formData.role || 'Chauffeur'} onValueChange={(value: 'Admin' | 'Planner' | 'Chauffeur') => setFormData({ ...formData, role: value, statut: value === 'Chauffeur' ? (formData.statut || 'DISPONIBLE') : undefined })}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Chauffeur">Chauffeur</SelectItem>
-                <SelectItem value="Planner">Planner</SelectItem>
-                <SelectItem value="Admin">Administrateur</SelectItem>
-              </SelectContent>
-            </Select>
+            {canModifyRole ? (
+              <Select 
+                value={formData.role || 'Chauffeur'} 
+                onValueChange={(value: 'Admin' | 'Planner' | 'Chauffeur') => 
+                  setFormData({ ...formData, role: value, statut: value === 'Chauffeur' ? (formData.statut || 'DISPONIBLE') : undefined })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Chauffeur">Chauffeur</SelectItem>
+                  <SelectItem value="Planner">Planner</SelectItem>
+                  <SelectItem value="Admin">Administrateur</SelectItem>
+                </SelectContent>
+              </Select>
+            ) : (
+              <div className="px-3 py-2 bg-muted text-muted-foreground rounded-md border">
+                {formData.role === 'Admin' ? 'Administrateur' : 
+                 formData.role === 'Planner' ? 'Planner' : 'Chauffeur'}
+                <p className="text-xs mt-1">Modification du rôle restreinte</p>
+              </div>
+            )}
           </div>
 
           {/* Statut (seulement pour les chauffeurs) */}

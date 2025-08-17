@@ -50,7 +50,8 @@ export async function GET() {
           id: assignationActive.id,
           dateDebut: assignationActive.dateDebut.toISOString(),
           assignedTo: `${assignationActive.user.nom.toUpperCase()}, ${assignationActive.user.prenom}`,
-          assignedToRole: assignationActive.user.role
+          assignedToRole: assignationActive.user.role,
+          assignedToId: assignationActive.user.id
         } : null
       }
     })

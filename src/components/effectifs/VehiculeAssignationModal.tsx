@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
+import { getDefaultBadge } from '@/lib/badge-utils'
 import { VehicleCombobox } from "@/components/ui/vehicle-combobox"
 import { User, Car } from 'lucide-react'
 
@@ -109,9 +110,12 @@ export function VehiculeAssignationModal({
                   </Badge>
                 )}
                 {user && (
-                  <Badge variant="outline">
-                    {user.role}
-                  </Badge>
+                  (() => {
+                    const badgeStyle = getDefaultBadge()
+                    return <Badge variant={badgeStyle.variant} className={badgeStyle.className}>
+                      {user.role}
+                    </Badge>
+                  })()
                 )}
               </div>
             </div>

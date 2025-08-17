@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { format } from 'date-fns'
 import { Car, User, ArrowRight, History } from 'lucide-react'
+import { getDefaultBadge, getAssignationBadge } from '@/lib/badge-utils'
 
 interface Vehicule {
   id: string
@@ -515,7 +516,7 @@ export function VehiculeModal({ isOpen, onClose, onSave, vehicule, mode }: Vehic
                   <h4 className="text-sm font-medium text-muted-foreground">
                     Historique des assignations
                   </h4>
-                  <Badge variant="outline">
+                  <Badge variant="secondary" className="text-xs font-medium px-2 py-1">
                     {assignations.length} assignation{assignations.length > 1 ? 's' : ''}
                   </Badge>
                 </div>
@@ -549,12 +550,15 @@ export function VehiculeModal({ isOpen, onClose, onSave, vehicule, mode }: Vehic
                                     `${assignation.user.nom.toUpperCase()}, ${assignation.user.prenom}`
                                   }
                                 </span>
-                                <Badge variant="outline" className="ml-2">
+                                <Badge variant="secondary" className="text-xs font-medium px-2 py-1 ml-2">
                                   {assignation.chauffeur ? 'Chauffeur' : assignation.user?.role}
                                 </Badge>
                               </div>
                               
-                              <Badge variant={assignation.actif ? "default" : "secondary"}>
+                              <Badge 
+                                variant={assignation.actif ? 'default' : 'secondary'} 
+                                className="text-xs font-medium px-2 py-1"
+                              >
                                 {assignation.actif ? "Actif" : "Terminé"}
                               </Badge>
                             </div>

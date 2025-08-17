@@ -1,18 +1,28 @@
 "use client"
 
 import { useState, useEffect } from 'react'
+import { useSession } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ClientCombobox } from '@/components/ui/combobox'
 import { Textarea } from '@/components/ui/textarea'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { PageHeader } from '@/components/page-header'
 import { Calendar, ChevronLeft, ChevronRight, Clock, User, MapPin, Plus, Zap, CheckCircle, UserPlus, Euro, Edit } from 'lucide-react'
 import { format, addDays, subDays, startOfDay, endOfDay, addHours, startOfHour } from 'date-fns'
 import { fr } from 'date-fns/locale'
+import { getCourseStatusBadge, formatStatut, getDefaultBadge } from '@/lib/badge-utils'
+import { CourseModal } from '@/components/courses/CourseModal'
 import {
   DndContext,
   DragOverlay,
@@ -69,7 +79,151 @@ interface Client {
   email?: string
 }
 
+// Composant de planning vertical pour les chauffeurs
+function ChauffeurVerticalPlanning({ 
+  courses, 
+  selectedDate, 
+  session, 
+  onCourseClick 
+}: {
+  courses: Course[]
+  selectedDate: Date
+  session: any
+  onCourseClick: (course: Course) => void
+}) {
+  const generateTimeSlots = () => {
+    const slots = []
+    for (let hour = 7; hour <= 22; hour++) {
+      slots.push(hour)
+    }
+    return slots
+  }
+
+  const formatHour = (hour: number) => {
+    return `${hour}:00`
+  }
+
+  const isToday = () => {
+    const today = new Date()
+    return selectedDate.toDateString() === today.toDateString()
+  }
+
+  const getCurrentHour = () => {
+    return new Date().getHours()
+  }
+
+
+  // Filtrer les courses pour la date sélectionnée et le chauffeur connecté
+  const dayStart = new Date(selectedDate)
+  dayStart.setHours(0, 0, 0, 0)
+  const dayEnd = new Date(selectedDate)
+  dayEnd.setHours(23, 59, 59, 999)
+
+  const chauffeurCourses = courses.filter((course: Course) => {
+    const courseDate = new Date(course.dateHeure)
+    return courseDate >= dayStart && courseDate <= dayEnd && course.user?.id === session?.user?.id
+  }).sort((a, b) => new Date(a.dateHeure).getTime() - new Date(b.dateHeure).getTime())
+
+  return (
+    <div className="flex-1 flex flex-col min-h-0 max-h-full">
+      <Card className="flex-1 flex flex-col min-h-0">
+        <CardHeader className="flex-shrink-0">
+          <CardTitle className="flex items-center gap-2">
+            <Calendar className="h-5 w-5" />
+            Mon planning du {format(selectedDate, 'dd/MM/yyyy', { locale: fr })}
+          </CardTitle>
+          <CardDescription>
+            {chauffeurCourses.length} course{chauffeurCourses.length > 1 ? 's' : ''} aujourd'hui
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex-1 overflow-y-auto min-h-0 p-4">
+          <div className="space-y-3">
+        {chauffeurCourses.length > 0 ? (
+          chauffeurCourses.map((course) => (
+            <div
+              key={course.id}
+              className="border rounded-lg p-4 cursor-pointer hover:shadow-md transition-all bg-card border-border"
+              onClick={() => onCourseClick(course)}
+            >
+              <div className="space-y-3">
+                {/* Heure et statut */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-4 w-4" />
+                    <span className="font-bold text-lg">
+                      {format(new Date(course.dateHeure), 'HH:mm', { locale: fr })}
+                    </span>
+                  </div>
+                  <Badge 
+                    variant={getCourseStatusBadge(course.statut).variant}
+                    className={getCourseStatusBadge(course.statut).className}
+                  >
+                    {formatStatut(course.statut)}
+                  </Badge>
+                </div>
+
+                {/* Trajet */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                    <span className="font-medium">{course.origine}</span>
+                  </div>
+                  <div className="flex items-center gap-2 ml-4">
+                    <div className="w-0.5 h-4 bg-gray-300"></div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                    <span className="font-medium">{course.destination}</span>
+                  </div>
+                </div>
+
+                {/* Client */}
+                <div className="flex items-center gap-2 text-sm">
+                  <User className="h-4 w-4" />
+                  <span>{course.client.nom.toUpperCase()}, {course.client.prenom}</span>
+                </div>
+
+                {/* Prix et notes */}
+                {(course.prix || course.notes) && (
+                  <div className="flex items-center justify-between text-sm border-t pt-2">
+                    {course.prix && (
+                      <div className="flex items-center gap-1">
+                        <Euro className="h-3 w-3" />
+                        <span className="font-medium">{course.prix}€</span>
+                      </div>
+                    )}
+                    {course.notes && (
+                      <span className="text-muted-foreground italic">{course.notes}</span>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          ))
+        ) : (
+          <div className="text-center py-12 text-muted-foreground">
+            <Calendar className="h-12 w-12 mx-auto mb-4 opacity-20" />
+            <h3 className="text-lg font-medium mb-2">Aucune course aujourd'hui</h3>
+            <p className="text-sm">Vous n'avez pas de course assignée pour cette date</p>
+          </div>
+        )}
+
+          {/* Indication de l'heure actuelle si c'est aujourd'hui */}
+          {isToday() && (
+            <div className="flex items-center gap-2 py-2 text-sm text-blue-600 border-t border-dashed border-blue-300">
+              <Clock className="h-4 w-4" />
+              <span>Il est actuellement {format(new Date(), 'HH:mm', { locale: fr })}</span>
+            </div>
+          )}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
 export default function PlanningPage() {
+  const { data: session } = useSession()
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [courses, setCourses] = useState<Course[]>([])
   const [users, setUsers] = useState<User[]>([])
@@ -86,8 +240,8 @@ export default function PlanningPage() {
     origine: '',
     destination: '',
     dateHeure: '',
-    prix: '',
-    notes: ''
+    notes: '',
+    statut: 'EN_ATTENTE'
   })
   const [assignmentDialog, setAssignmentDialog] = useState<{
     isOpen: boolean
@@ -95,6 +249,11 @@ export default function PlanningPage() {
   }>({ isOpen: false })
   const [isDragging, setIsDragging] = useState(false)
   const [createCourseDialog, setCreateCourseDialog] = useState(false)
+  const [courseModal, setCourseModal] = useState<{
+    isOpen: boolean;
+    course?: Course | null;
+    mode: 'create' | 'view' | 'edit';
+  }>({ isOpen: false, course: null, mode: 'create' })
   const [clients, setClients] = useState<Client[]>([])
   const [showNewClientForm, setShowNewClientForm] = useState(false)
   const [courseFormData, setCourseFormData] = useState({
@@ -102,7 +261,6 @@ export default function PlanningPage() {
     destination: '',
     dateHeure: '',
     clientId: '',
-    prix: '',
     notes: ''
   })
   const [newClientData, setNewClientData] = useState({
@@ -124,9 +282,11 @@ export default function PlanningPage() {
   )
 
   useEffect(() => {
-    fetchData()
-    fetchClients()
-  }, [selectedDate])
+    if (session) {
+      fetchData()
+      fetchClients()
+    }
+  }, [selectedDate, session])
 
   // Auto-scroll vers l'heure actuelle au chargement (seulement pour aujourd'hui)
   useEffect(() => {
@@ -155,16 +315,98 @@ export default function PlanningPage() {
     try {
       const response = await fetch('/api/clients')
       const data = await response.json()
-      setClients(data)
+      setClients(Array.isArray(data) ? data : [])
     } catch (error) {
       console.error('Erreur lors du chargement des clients:', error)
     }
   }
 
+  // Fonctions pour la modal unifiée
+  const handleCreateCourse = () => {
+    setCourseModal({ isOpen: true, course: null, mode: 'create' })
+  }
+
+  const handleViewCourse = (course: Course) => {
+    setCourseModal({ isOpen: true, course, mode: 'view' })
+  }
+
+  const handleEditCourse = (course: Course) => {
+    setCourseModal({ isOpen: true, course, mode: 'edit' })
+  }
+
+  const handleSaveCourse = async (courseData: any) => {
+    try {
+      const url = courseModal.course
+        ? `/api/courses/${courseModal.course.id}`
+        : "/api/courses";
+      const method = courseModal.course ? "PUT" : "POST";
+
+      const response = await fetch(url, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(courseData),
+      });
+
+      if (response.ok) {
+        await fetchData(); // Recharger les données
+      } else {
+        throw new Error('Erreur lors de la sauvegarde');
+      }
+    } catch (error) {
+      console.error("Erreur lors de la sauvegarde:", error);
+      throw error; // Relancer pour que le composant puisse gérer l'erreur
+    }
+  }
+
+  const handleStatusUpdate = async (courseId: string, newStatus: string) => {
+    try {
+      const response = await fetch(`/api/courses/${courseId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          statut: newStatus
+        }),
+      });
+
+      if (response.ok) {
+        await fetchData();
+      } else {
+        throw new Error('Erreur lors de la mise à jour du statut');
+      }
+    } catch (error) {
+      console.error("Erreur lors de la mise à jour du statut:", error);
+      throw error;
+    }
+  }
+
+  const handleDeleteCourse = async (courseId: string) => {
+    try {
+      const response = await fetch(`/api/courses/${courseId}`, {
+        method: "DELETE",
+      });
+      
+      if (response.ok) {
+        await fetchData();
+      } else {
+        throw new Error('Erreur lors de la suppression');
+      }
+    } catch (error) {
+      console.error("Erreur lors de la suppression:", error);
+      throw error;
+    }
+  }
+
   const fetchData = async () => {
     try {
+      // Pour les chauffeurs, ne charger que leurs courses + non assignées
+      const coursesUrl = session?.user?.role === 'Chauffeur' ? `/api/courses?userId=${session.user.id}` : '/api/courses'
+      
       const [coursesRes, usersRes] = await Promise.all([
-        fetch('/api/courses'),
+        fetch(coursesUrl),
         fetch('/api/users')
       ])
 
@@ -189,7 +431,12 @@ export default function PlanningPage() {
       }
       
       // Filtrer uniquement les chauffeurs
-      const chauffeurs = usersData.filter(user => user.role === 'Chauffeur')
+      let chauffeurs = usersData.filter(user => user.role === 'Chauffeur')
+      
+      // Si c'est un chauffeur connecté, ne montrer que lui-même
+      if (session?.user?.role === 'Chauffeur') {
+        chauffeurs = chauffeurs.filter(user => user.id === session.user.id)
+      }
 
       // Filtrer les courses pour la date sélectionnée
       const dayStart = startOfDay(selectedDate)
@@ -233,11 +480,16 @@ export default function PlanningPage() {
   }
 
   const getCoursesForChauffeur = (userId: string) => {
-    return courses.filter(course => course.user?.id === userId)
+    return courses.filter(course => 
+      course.user?.id === userId && 
+      ['ASSIGNEE', 'EN_COURS', 'TERMINEE', 'ANNULEE'].includes(course.statut)
+    )
   }
 
   const getUnassignedCourses = () => {
-    return courses.filter(course => !course.user)
+    return courses.filter(course => 
+      course.statut === 'EN_ATTENTE'
+    )
   }
 
   const navigateDate = (direction: 'prev' | 'next') => {
@@ -374,8 +626,8 @@ export default function PlanningPage() {
     return `${hour}:00`
   }
 
-  const getCourseForChauffeurAtHour = (chauffeurId: string, hour: number) => {
-    const foundCourse = courses.find(course => {
+  const getCoursesForChauffeurAtHour = (chauffeurId: string, hour: number) => {
+    return courses.filter(course => {
       if (course.user?.id !== chauffeurId) return false
       const courseDate = new Date(course.dateHeure)
       const courseHour = courseDate.getHours()
@@ -384,29 +636,23 @@ export default function PlanningPage() {
       const courseDay = courseDate.toDateString()
       const selectedDay = selectedDate.toDateString()
       
-      const isMatch = courseDay === selectedDay && courseHour === hour
-      
-      // Debug pour comprendre pourquoi les courses n'apparaissent pas
-      if (isMatch) {
-        console.log(`Course trouvée pour ${chauffeurId} à ${hour}h:`, {
-          courseId: course.id,
-          courseHour,
-          courseDay,
-          selectedDay,
-          user: course.user
-        })
-      }
-      
-      return isMatch
-    })
-    
-    return foundCourse
+      return courseDay === selectedDay && courseHour === hour
+    }).sort((a, b) => new Date(a.dateHeure).getTime() - new Date(b.dateHeure).getTime())
+  }
+
+  // Fonction legacy pour compatibilité (retourne la première course du créneau)
+  const getCourseForChauffeurAtHour = (chauffeurId: string, hour: number) => {
+    const coursesAtHour = getCoursesForChauffeurAtHour(chauffeurId, hour)
+    return coursesAtHour.length > 0 ? coursesAtHour[0] : null
   }
 
   const isChauffeurAvailable = (chauffeurId: string, hour: number) => {
-    // Pour l'instant, on considère qu'un chauffeur est disponible s'il n'a pas de course à cette heure
-    // Plus tard, on pourra ajouter une vraie gestion des disponibilités
-    return !getCourseForChauffeurAtHour(chauffeurId, hour)
+    // Un chauffeur peut avoir plusieurs courses sur le même créneau (courses courtes)
+    // On considère qu'il est toujours disponible pour en accepter une de plus
+    // sauf s'il a déjà beaucoup de courses (plus de 3 par exemple)
+    
+    const coursesAtHour = getCoursesForChauffeurAtHour(chauffeurId, hour)
+    return coursesAtHour.length < 3 // Limite arbitraire de 3 courses par heure
   }
 
   const formatStatut = (statut: string) => {
@@ -543,7 +789,6 @@ export default function PlanningPage() {
       destination: '',
       dateHeure: format(selectedDate, 'yyyy-MM-dd\'T\'HH:mm'),
       clientId: '',
-      prix: '',
       notes: ''
     })
     setNewClientData({
@@ -555,7 +800,7 @@ export default function PlanningPage() {
     setShowNewClientForm(false)
   }
 
-  const handleCreateCourse = async (e: React.FormEvent) => {
+  const handleCreateCourseOld = async (e: React.FormEvent) => {
     e.preventDefault()
     
     try {
@@ -648,7 +893,7 @@ export default function PlanningPage() {
           if (!course.user || course.statut === 'EN_ATTENTE') {
             setAssignmentDialog({ isOpen: true, course })
           } else {
-            setCourseDetailsDialog({ isOpen: true, course })
+            handleViewCourse(course)
           }
           // Reset après un délai
           setTimeout(() => setIsClicking(false), 100)
@@ -700,7 +945,7 @@ export default function PlanningPage() {
       e.stopPropagation()
       setIsClicking(true)
       // Toujours ouvrir les détails pour les courses dans le planning
-      setCourseDetailsDialog({ isOpen: true, course })
+      handleViewCourse(course)
       setTimeout(() => setIsClicking(false), 100)
     }
 
@@ -894,9 +1139,24 @@ export default function PlanningPage() {
 
       {/* Planning avec Timeline */}
       <div className="flex-1 p-6 flex flex-col overflow-hidden">
-        <div className={`grid gap-6 flex-1 min-h-0 ${
-          getUnassignedCourses().length > 0 ? 'grid-cols-12' : 'grid-cols-1'
-        }`}>
+        {/* Vue spéciale verticale pour les chauffeurs */}
+        {session && session.user?.role === 'Chauffeur' ? (
+          <ChauffeurVerticalPlanning 
+            courses={courses}
+            selectedDate={selectedDate}
+            session={session}
+            onCourseClick={(course) => {
+              if (!course.user || course.statut === 'EN_ATTENTE') {
+                setAssignmentDialog({ isOpen: true, course })
+              } else {
+                handleViewCourse(course)
+              }
+            }}
+          />
+        ) : session ? (
+          <div className={`grid gap-6 flex-1 min-h-0 ${
+            getUnassignedCourses().length > 0 ? 'grid-cols-12' : 'grid-cols-1'
+          }`}>
           
           {/* Panel gauche - Courses non assignées */}
           {getUnassignedCourses().length > 0 && (
@@ -942,7 +1202,7 @@ export default function PlanningPage() {
                       size="sm" 
                       onClick={() => {
                         resetCourseForm()
-                        setCreateCourseDialog(true)
+                        handleCreateCourse()
                       }}
                     >
                       <Plus className="h-4 w-4 mr-2" />
@@ -1012,14 +1272,35 @@ export default function PlanningPage() {
                             </div>
                           </td>
                           {generateTimeSlots().map((hour) => {
-                            const course = getCourseForChauffeurAtHour(chauffeur.id, hour)
+                            const coursesAtHour = getCoursesForChauffeurAtHour(chauffeur.id, hour)
                             const isCurrentHour = isToday() && hour === getCurrentHour()
                             
                             return (
                               <DroppableSlot key={hour} chauffeurId={chauffeur.id} hour={hour}>
                                 <div className={`${isCurrentHour ? 'bg-blue-50' : ''} w-full h-full p-1`}>
-                                {course ? (
-                                  <PlanningCourse course={course} />
+                                {coursesAtHour.length > 0 ? (
+                                  <div className="space-y-1">
+                                    {coursesAtHour.length === 1 ? (
+                                      // Une seule course : affichage normal
+                                      <PlanningCourse course={coursesAtHour[0]} />
+                                    ) : (
+                                      // Plusieurs courses : affichage compact
+                                      <>
+                                        <div className="transform scale-95">
+                                          <PlanningCourse course={coursesAtHour[0]} />
+                                        </div>
+                                        <div className="text-xs text-center text-orange-600 font-medium bg-orange-50 rounded px-1 py-0.5">
+                                          +{coursesAtHour.length - 1} autre{coursesAtHour.length > 2 ? 's' : ''}
+                                        </div>
+                                        {/* Courses supplémentaires en mode très compact */}
+                                        {coursesAtHour.slice(1).map((course) => (
+                                          <div key={course.id} className="transform scale-75 -mt-1">
+                                            <PlanningCourse course={course} />
+                                          </div>
+                                        ))}
+                                      </>
+                                    )}
+                                  </div>
                                 ) : (
                                   <div className="h-12 bg-gray-50 rounded border border-gray-200 flex items-center justify-center">
                                     <span className="text-xs text-gray-400">-</span>
@@ -1038,7 +1319,11 @@ export default function PlanningPage() {
             </Card>
           </div>
         </div>
-
+        ) : (
+          <div className="flex-1 flex items-center justify-center">
+            <div>Chargement...</div>
+          </div>
+        )}
 
         {/* Modale de création de course */}
         <Dialog open={createCourseDialog} onOpenChange={(open) => {
@@ -1052,30 +1337,17 @@ export default function PlanningPage() {
                 Créer une nouvelle course pour le {format(selectedDate, 'dd/MM/yyyy', { locale: fr })}
               </DialogDescription>
             </DialogHeader>
-            <form onSubmit={handleCreateCourse} className="space-y-4">
+            <form onSubmit={handleCreateCourseOld} className="space-y-4">
               {/* Date et heure */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="dateHeure">Date et heure *</Label>
-                  <Input
-                    id="dateHeure"
-                    type="datetime-local"
-                    value={courseFormData.dateHeure}
-                    onChange={(e) => setCourseFormData({ ...courseFormData, dateHeure: e.target.value })}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="prix">Prix estimé (€)</Label>
-                  <Input
-                    id="prix"
-                    type="number"
-                    step="0.01"
-                    value={courseFormData.prix}
-                    onChange={(e) => setCourseFormData({ ...courseFormData, prix: e.target.value })}
-                    placeholder="0.00"
-                  />
-                </div>
+              <div className="space-y-2">
+                <Label htmlFor="dateHeure">Date et heure *</Label>
+                <Input
+                  id="dateHeure"
+                  type="datetime-local"
+                  value={courseFormData.dateHeure}
+                  onChange={(e) => setCourseFormData({ ...courseFormData, dateHeure: e.target.value })}
+                  required
+                />
               </div>
 
               {/* Origine et destination */}
@@ -1232,12 +1504,10 @@ export default function PlanningPage() {
                       </div>
                       <div className="space-y-1">
                         <div className="text-sm font-medium text-muted-foreground">Statut</div>
-                        <Badge variant={
-                          courseDetailsDialog.course.statut === 'EN_ATTENTE' ? 'secondary' :
-                          courseDetailsDialog.course.statut === 'ASSIGNEE' ? 'default' :
-                          courseDetailsDialog.course.statut === 'EN_COURS' ? 'secondary' :
-                          courseDetailsDialog.course.statut === 'TERMINEE' ? 'default' : 'destructive'
-                        }>
+                        <Badge 
+                          variant={getCourseStatusBadge(courseDetailsDialog.course.statut).variant}
+                          className={getCourseStatusBadge(courseDetailsDialog.course.statut).className}
+                        >
                           {formatStatut(courseDetailsDialog.course.statut)}
                         </Badge>
                       </div>
@@ -1334,8 +1604,8 @@ export default function PlanningPage() {
                           origine: editCourseFormData.origine,
                           destination: editCourseFormData.destination,
                           dateHeure: new Date(editCourseFormData.dateHeure).toISOString(),
-                          prix: editCourseFormData.prix ? parseFloat(editCourseFormData.prix) : null,
                           notes: editCourseFormData.notes || null,
+                          statut: editCourseFormData.statut,
                         }),
                       })
 
@@ -1383,18 +1653,37 @@ export default function PlanningPage() {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="editPrix">Prix (€)</Label>
-                        <Input
-                          id="editPrix"
-                          type="number"
-                          step="0.01"
-                          value={editCourseFormData.prix}
-                          onChange={(e) => setEditCourseFormData({ ...editCourseFormData, prix: e.target.value })}
-                          placeholder="0.00"
-                        />
-                      </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="editStatut">Statut</Label>
+                      <Select
+                        value={editCourseFormData.statut}
+                        onValueChange={(value) => setEditCourseFormData({ ...editCourseFormData, statut: value })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="EN_ATTENTE">En attente</SelectItem>
+                          <SelectItem value="ASSIGNEE">Assignée</SelectItem>
+                          <SelectItem value="EN_COURS">En cours</SelectItem>
+                          
+                          {/* Terminée et Annulée seulement si course assignée OU déjà dans ces statuts */}
+                          {((courseDetailsDialog.course?.user && editCourseFormData.statut !== 'EN_ATTENTE') || 
+                            editCourseFormData.statut === 'TERMINEE' || 
+                            editCourseFormData.statut === 'ANNULEE') && (
+                            <>
+                              <SelectItem value="TERMINEE">Terminée</SelectItem>
+                              <SelectItem value="ANNULEE">Annulée</SelectItem>
+                            </>
+                          )}
+                        </SelectContent>
+                      </Select>
+                      {(!courseDetailsDialog.course?.user || editCourseFormData.statut === 'EN_ATTENTE') && 
+                       editCourseFormData.statut !== 'TERMINEE' && editCourseFormData.statut !== 'ANNULEE' && (
+                        <p className="text-xs text-muted-foreground">
+                          Les statuts "Terminée" et "Annulée" ne sont disponibles que pour les courses assignées.
+                        </p>
+                      )}
                     </div>
 
                     <div className="space-y-2">
@@ -1420,55 +1709,141 @@ export default function PlanningPage() {
                 )}
 
                 {!editingCourse && (
-                  <div className="flex justify-between pt-4">
-                    <div className="space-x-2">
-                      {courseDetailsDialog.course.user && (
+                  <div className="space-y-4 pt-4">
+                    {/* Actions principales sur deux lignes organisées */}
+                    <div className="flex flex-col gap-3">
+                      
+                      {/* Ligne 1: Actions de statut (si disponibles) */}
+                      {courseDetailsDialog.course.user && 
+                       courseDetailsDialog.course.statut !== 'TERMINEE' && 
+                       courseDetailsDialog.course.statut !== 'ANNULEE' && (
+                        <div className="flex gap-2 justify-center">
+                          <Button 
+                            className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                            onClick={async () => {
+                              try {
+                                const response = await fetch(`/api/courses/${courseDetailsDialog.course!.id}`, {
+                                  method: 'PUT',
+                                  headers: {
+                                    'Content-Type': 'application/json',
+                                  },
+                                  body: JSON.stringify({
+                                    ...courseDetailsDialog.course,
+                                    statut: 'TERMINEE',
+                                    clientId: courseDetailsDialog.course!.client.id,
+                                    userId: courseDetailsDialog.course!.user?.id || null,
+                                  }),
+                                })
+
+                                if (response.ok) {
+                                  await fetchData()
+                                  setCourseDetailsDialog({ isOpen: false })
+                                } else {
+                                  alert('Erreur lors de la mise à jour du statut')
+                                }
+                              } catch (error) {
+                                console.error('Erreur:', error)
+                                alert('Erreur lors de la mise à jour du statut')
+                              }
+                            }}
+                          >
+                            <CheckCircle className="h-4 w-4 mr-2" />
+                            Terminer la course
+                          </Button>
+                          <Button 
+                            variant="destructive"
+                            className="flex-1"
+                            onClick={async () => {
+                              if (confirm('Êtes-vous sûr de vouloir annuler cette course ?')) {
+                                try {
+                                  const response = await fetch(`/api/courses/${courseDetailsDialog.course!.id}`, {
+                                    method: 'PUT',
+                                    headers: {
+                                      'Content-Type': 'application/json',
+                                    },
+                                    body: JSON.stringify({
+                                      ...courseDetailsDialog.course,
+                                      statut: 'ANNULEE',
+                                      clientId: courseDetailsDialog.course!.client.id,
+                                      userId: courseDetailsDialog.course!.user?.id || null,
+                                    }),
+                                  })
+
+                                  if (response.ok) {
+                                    await fetchData()
+                                    setCourseDetailsDialog({ isOpen: false })
+                                  } else {
+                                    alert('Erreur lors de la mise à jour du statut')
+                                  }
+                                } catch (error) {
+                                  console.error('Erreur:', error)
+                                  alert('Erreur lors de la mise à jour du statut')
+                                }
+                              }
+                            }}
+                          >
+                            Annuler la course
+                          </Button>
+                        </div>
+                      )}
+
+                      {/* Ligne 2: Actions d'assignation et modification */}
+                      <div className="flex gap-2 justify-center">
+                        {courseDetailsDialog.course.statut === 'EN_ATTENTE' && (
+                          <Button 
+                            className="flex-1"
+                            onClick={() => {
+                              setCourseDetailsDialog({ isOpen: false })
+                              setAssignmentDialog({ isOpen: true, course: courseDetailsDialog.course })
+                            }}
+                          >
+                            Assigner
+                          </Button>
+                        )}
+                        {courseDetailsDialog.course.user && (
+                          <Button 
+                            variant="outline"
+                            className="flex-1"
+                            onClick={async () => {
+                              await handleCourseAssign(courseDetailsDialog.course!.id, null)
+                              setCourseDetailsDialog({ isOpen: false })
+                            }}
+                          >
+                            Désassigner
+                          </Button>
+                        )}
                         <Button 
                           variant="outline"
-                          onClick={async () => {
-                            await handleCourseAssign(courseDetailsDialog.course!.id, null)
-                            setCourseDetailsDialog({ isOpen: false })
-                          }}
-                        >
-                          Désassigner
-                        </Button>
-                      )}
-                      {courseDetailsDialog.course.statut === 'EN_ATTENTE' && (
-                        <Button 
+                          className="flex-1"
                           onClick={() => {
-                            setCourseDetailsDialog({ isOpen: false })
-                            setAssignmentDialog({ isOpen: true, course: courseDetailsDialog.course })
+                            setEditCourseFormData({
+                              origine: courseDetailsDialog.course!.origine,
+                              destination: courseDetailsDialog.course!.destination,
+                              dateHeure: new Date(courseDetailsDialog.course!.dateHeure).toLocaleString('sv-SE').slice(0, 16),
+                              notes: courseDetailsDialog.course!.notes || '',
+                              statut: courseDetailsDialog.course!.statut
+                            })
+                            setEditingCourse(true)
                           }}
                         >
-                          Assigner
+                          <Edit className="h-4 w-4 mr-2" />
+                          Modifier
                         </Button>
-                      )}
+                      </div>
+                    </div>
+
+                    {/* Bouton Fermer en bas, centré */}
+                    <div className="flex justify-center pt-2 border-t">
                       <Button 
-                        variant="outline"
+                        variant="ghost" 
                         onClick={() => {
-                          setEditCourseFormData({
-                            origine: courseDetailsDialog.course!.origine,
-                            destination: courseDetailsDialog.course!.destination,
-                            dateHeure: format(new Date(courseDetailsDialog.course!.dateHeure), "yyyy-MM-dd'T'HH:mm"),
-                            prix: courseDetailsDialog.course!.prix?.toString() || '',
-                            notes: courseDetailsDialog.course!.notes || ''
-                          })
-                          setEditingCourse(true)
+                          setCourseDetailsDialog({ isOpen: false })
+                          setEditingCourse(false)
                         }}
                       >
-                        <Edit className="h-4 w-4 mr-2" />
-                        Modifier
+                        Fermer
                       </Button>
                     </div>
-                    <Button 
-                      variant="outline" 
-                      onClick={() => {
-                        setCourseDetailsDialog({ isOpen: false })
-                        setEditingCourse(false)
-                      }}
-                    >
-                      Fermer
-                    </Button>
                   </div>
                 )}
               </div>
@@ -1562,9 +1937,12 @@ export default function PlanningPage() {
                                 </Badge>
                               )}
                               {driver.statut === 'DISPONIBLE' && driver.isAvailable && !driver.isCompatible && (
-                                <Badge variant="outline" className="text-xs">
-                                  Horaire incompatible
-                                </Badge>
+                                (() => {
+                                  const badgeStyle = getDefaultBadge()
+                                  return <Badge variant={badgeStyle.variant} className={`${badgeStyle.className} text-xs`}>
+                                    Horaire incompatible
+                                  </Badge>
+                                })()
                               )}
                             </div>
                             
@@ -1659,6 +2037,19 @@ export default function PlanningPage() {
             <DraggableCourse course={activeCourse} />
           ) : null}
         </DragOverlay>
+
+        {/* Modal unifiée */}
+        <CourseModal
+          isOpen={courseModal.isOpen}
+          onClose={() => setCourseModal({ isOpen: false, course: null, mode: 'create' })}
+          course={courseModal.course}
+          mode={courseModal.mode}
+          clients={clients}
+          users={users}
+          onSave={handleSaveCourse}
+          onStatusUpdate={handleStatusUpdate}
+          onDelete={handleDeleteCourse}
+        />
       </div>
     </div>
     </DndContext>

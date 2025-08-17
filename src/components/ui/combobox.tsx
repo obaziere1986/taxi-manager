@@ -114,7 +114,7 @@ export function ClientCombobox({
   className,
   disabled = false,
 }: ClientComboboxProps) {
-  const options: ComboboxOption[] = clients
+  const options: ComboboxOption[] = (Array.isArray(clients) ? clients : [])
     .sort((a, b) => a.nom.localeCompare(b.nom))
     .map((client) => ({
       value: client.id,
@@ -164,7 +164,7 @@ export function ChauffeurCombobox({
   showVehicle = true,
   showStatus = false,
 }: ChauffeurComboboxProps) {
-  const options: ComboboxOption[] = chauffeurs
+  const options: ComboboxOption[] = (Array.isArray(chauffeurs) ? chauffeurs : [])
     .sort((a, b) => a.nom.localeCompare(b.nom))
     .map((chauffeur) => {
       let label = `${chauffeur.nom.toUpperCase()} ${chauffeur.prenom}`

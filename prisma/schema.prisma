@@ -32,7 +32,6 @@ model Course {
   destination String
   dateHeure   DateTime
   statut      StatutCourse @default(EN_ATTENTE)
-  prix        Float?
   notes       String?
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
@@ -76,6 +75,23 @@ model User {
   role      RoleUtilisateur @default(Chauffeur)
   statut    StatutPersonne? @default(DISPONIBLE)
   actif     Boolean         @default(true)
+  
+  // Authentification
+  login        String?  @unique  // Login personnalisé optionnel (sinon email)
+  passwordHash String?           // Hash du mot de passe bcrypt
+  
+  // Sessions
+  lastLoginAt  DateTime?        // Dernière connexion
+  failedLogins Int      @default(0) // Compteur de tentatives échouées
+  lockedUntil  DateTime?        // Verrouillage temporaire après échecs
+  
+  // Préférences de notifications
+  notificationsEmail   Boolean @default(true)   // Notifications par email
+  notificationsSMS     Boolean @default(false)  // Notifications par SMS
+  notificationsDesktop Boolean @default(true)   // Notifications dans le navigateur
+  
+  // Photo de profil
+  avatarUrl            String?                  // URL de la photo de profil
   
   // Informations véhicule (pour les chauffeurs)
   vehicule    String?
@@ -158,4 +174,28 @@ model Parametre {
   description String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// Système de permissions granulaires
+model Permission {
+  id          String @id @default(cuid())
+  nom         String @unique  // Ex: "users.create", "users.edit", "users.delete", "vehicles.manage"
+  description String?
+  module      String          // Ex: "users", "vehicles", "courses", "clients", "settings"
+  action      String          // Ex: "create", "read", "update", "delete", "manage"
+  createdAt   DateTime @default(now())
+  
+  rolePermissions RolePermission[]
+}
+
+model RolePermission {
+  id           String          @id @default(cuid())
+  role         RoleUtilisateur
+  permissionId String
+  permission   Permission      @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  active       Boolean         @default(true)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  
+  @@unique([role, permissionId])
 }

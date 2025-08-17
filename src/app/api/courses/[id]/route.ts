@@ -8,21 +8,47 @@ export async function PUT(
   try {
     const { id } = await params
     const body = await request.json()
-    const { origine, destination, dateHeure, clientId, userId, prix, notes, statut } = body
+    const { origine, destination, dateHeure, clientId, userId, notes, statut } = body
 
     const course = await executeWithRetry(async (prisma) => {
+      // D'abord récupérer la course existante pour la logique automatique
+      const existingCourse = await prisma.course.findUnique({
+        where: { id }
+      })
+      
+      if (!existingCourse) {
+        throw new Error('Course non trouvée')
+      }
+      
+      // Construire l'objet data seulement avec les champs fournis
+      const updateData: any = {}
+      
+      if (origine !== undefined) updateData.origine = origine
+      if (destination !== undefined) updateData.destination = destination
+      if (dateHeure !== undefined) updateData.dateHeure = new Date(dateHeure)
+      if (clientId !== undefined) updateData.clientId = clientId
+      if (userId !== undefined) updateData.userId = userId || null
+      if (notes !== undefined) updateData.notes = notes || null
+      if (statut !== undefined) updateData.statut = statut
+      
+      // Logique automatique du statut si userId change et que statut n'est pas explicitement fourni
+      if (userId !== undefined && statut === undefined) {
+        const newUserId = userId || null
+        const currentUserId = existingCourse.userId
+        
+        // Si on assigne un chauffeur à une course EN_ATTENTE, passer à ASSIGNEE
+        if (newUserId && !currentUserId && existingCourse.statut === 'EN_ATTENTE') {
+          updateData.statut = 'ASSIGNEE'
+        }
+        // Si on retire le chauffeur d'une course ASSIGNEE, retourner à EN_ATTENTE
+        else if (!newUserId && currentUserId && existingCourse.statut === 'ASSIGNEE') {
+          updateData.statut = 'EN_ATTENTE'
+        }
+      }
+      
       return await prisma.course.update({
         where: { id },
-        data: {
-          origine,
-          destination,
-          dateHeure: dateHeure ? new Date(dateHeure) : undefined,
-          clientId,
-          userId: userId || null,
-          prix: prix ? parseFloat(prix) : null,
-          notes: notes || null,
-          statut: statut || undefined,
-        },
+        data: updateData,
         include: {
           client: {
             select: { id: true, nom: true, prenom: true, telephone: true }

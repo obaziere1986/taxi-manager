@@ -1,34 +1,19 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useSession } from 'next-auth/react';
 import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { ClientCombobox } from "@/components/ui/combobox";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/page-header";
+import { getCourseStatusBadge, formatStatut } from '@/lib/badge-utils';
+import { ProtectedComponent } from "@/components/auth/ProtectedComponent";
+import { CourseModal } from "@/components/courses/CourseModal";
 import {
   Collapsible,
   CollapsibleContent,
@@ -45,7 +30,6 @@ import {
   Edit,
   Trash2,
   Calendar,
-  CalendarDays,
 } from "lucide-react";
 import { Course, CourseCategory, categorizeCourses } from "@/lib/course-utils";
 
@@ -64,24 +48,20 @@ interface User {
   vehicule?: string;
 }
 
-const statutLabels = {
-  EN_ATTENTE: { label: "En attente", color: "bg-gray-500" },
-  ASSIGNEE: { label: "Assignée", color: "bg-blue-500" },
-  EN_COURS: { label: "En cours", color: "bg-orange-500" },
-  TERMINEE: { label: "Terminée", color: "bg-green-500" },
-  ANNULEE: { label: "Annulée", color: "bg-red-500" },
-};
+// Supprimé statutLabels - utilise maintenant getCourseStatusBadge de badge-utils
 
 function CourseCard({
   course,
   onEdit,
   onDelete,
   onUpdateStatut,
+  session,
 }: {
   course: Course;
   onEdit: (course: Course) => void;
   onDelete: (id: string) => void;
   onUpdateStatut: (id: string, statut: string) => void;
+  session: { user: { role: string; id: string } } | null;
 }) {
   return (
     <div className="border rounded-lg p-4 space-y-3">
@@ -132,27 +112,33 @@ function CourseCard({
         {/* Statut & Actions */}
         <div className="flex flex-col items-end gap-2">
           <div className="flex items-center">
-            <div
-              className={`w-2 h-2 rounded-full mr-2 ${
-                statutLabels[course.statut].color
-              }`}
-            ></div>
-            <Badge variant="outline" className="text-xs">
-              {statutLabels[course.statut].label}
+            <Badge 
+              variant={getCourseStatusBadge(course.statut).variant}
+              className={getCourseStatusBadge(course.statut).className}
+            >
+              {formatStatut(course.statut)}
             </Badge>
           </div>
 
           <div className="flex gap-1">
-            <Button variant="outline" size="sm" onClick={() => onEdit(course)}>
-              <Edit className="h-3 w-3" />
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onDelete(course.id)}
-            >
-              <Trash2 className="h-3 w-3" />
-            </Button>
+            {/* Logique d'affichage du bouton d'édition - seul TERMINEE empêche la modification */}
+            {(session?.user?.role !== 'Chauffeur' || 
+             (course.user?.id === session.user.id && course.statut !== 'TERMINEE')) && (
+              <ProtectedComponent permissions={["courses.update"]}>
+                <Button variant="outline" size="sm" onClick={() => onEdit(course)}>
+                  <Edit className="h-3 w-3" />
+                </Button>
+              </ProtectedComponent>
+            )}
+            <ProtectedComponent permissions={["courses.delete"]}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onDelete(course.id)}
+              >
+                <Trash2 className="h-3 w-3" />
+              </Button>
+            </ProtectedComponent>
           </div>
         </div>
       </div>
@@ -166,12 +152,14 @@ function CategorySection({
   onEdit,
   onDelete,
   onUpdateStatut,
+  session,
 }: {
   title: string;
   categories: CourseCategory[];
   onEdit: (course: Course) => void;
   onDelete: (id: string) => void;
   onUpdateStatut: (id: string, statut: string) => void;
+  session: { user: { role: string; id: string } } | null;
 }) {
   // Par défaut, "aujourd'hui" est ouvert
   const [openCategories, setOpenCategories] = useState<Set<string>>(
@@ -199,7 +187,7 @@ function CategorySection({
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           {title}
-          <Badge variant="outline">{totalCourses}</Badge>
+          <Badge variant="outline" className="text-xs font-medium px-2 py-1">{totalCourses}</Badge>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -236,6 +224,7 @@ function CategorySection({
                   onEdit={onEdit}
                   onDelete={onDelete}
                   onUpdateStatut={onUpdateStatut}
+                  session={session}
                 />
               ))}
             </CollapsibleContent>
@@ -247,31 +236,30 @@ function CategorySection({
 }
 
 export default function CoursesPage() {
+  const { data: session } = useSession();
   const [courses, setCourses] = useState<Course[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingCourse, setEditingCourse] = useState<Course | null>(null);
-  const [formData, setFormData] = useState({
-    origine: "",
-    destination: "",
-    dateHeure: "",
-    clientId: "",
-    userId: "",
-    prix: "",
-    notes: "",
-    statut: "EN_ATTENTE",
-  });
+  const [courseModal, setCourseModal] = useState<{
+    isOpen: boolean;
+    course?: Course | null;
+    mode: 'create' | 'view' | 'edit';
+  }>({ isOpen: false, course: null, mode: 'create' });
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    if (session) {
+      fetchData();
+    }
+  }, [session]);
 
   const fetchData = async () => {
     try {
+      // Pour les chauffeurs, ne charger que leurs courses + non assignées
+      const coursesUrl = session?.user?.role === 'Chauffeur' ? `/api/courses?userId=${session.user.id}` : '/api/courses';
+      
       const [coursesRes, clientsRes, chauffeursRes] = await Promise.all([
-        fetch("/api/courses"),
+        fetch(coursesUrl),
         fetch("/api/clients"),
         fetch("/api/users"),
       ]);
@@ -282,10 +270,10 @@ export default function CoursesPage() {
         chauffeursRes.json(),
       ]);
 
-      setCourses(coursesData);
-      setClients(clientsData);
+      setCourses(Array.isArray(coursesData) ? coursesData : []);
+      setClients(Array.isArray(clientsData) ? clientsData : []);
       // Filtrer uniquement les chauffeurs
-      const chauffeurs = chauffeursData.filter(user => user.role === 'Chauffeur');
+      const chauffeurs = Array.isArray(chauffeursData) ? chauffeursData.filter(user => user.role === 'Chauffeur') : [];
       setUsers(chauffeurs);
     } catch (error) {
       console.error("Erreur lors du chargement des données:", error);
@@ -294,50 +282,62 @@ export default function CoursesPage() {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+
+  const handleEdit = (course: Course) => {
+    console.log('handleEdit appelé', { course, userRole: session?.user?.role, userId: session?.user?.id });
+    
+    // Pour les chauffeurs, vérifier les permissions
+    if (session?.user?.role === 'Chauffeur') {
+      // Vérifier si c'est une course assignée au chauffeur et pas terminée
+      if (course.user?.id === session.user.id && course.statut !== 'TERMINEE') {
+        setCourseModal({ isOpen: true, course, mode: 'edit' });
+      } else {
+        console.log('Chauffeur - accès refusé:', { 
+          courseUserId: course.user?.id, 
+          sessionUserId: session.user.id, 
+          statut: course.statut 
+        });
+      }
+    } else {
+      // Admin/Planner peuvent toujours modifier
+      setCourseModal({ isOpen: true, course, mode: 'edit' });
+    }
+  };
+
+  const handleCreateCourse = () => {
+    setCourseModal({ isOpen: true, course: null, mode: 'create' });
+  };
+
+  const handleSaveCourse = async (courseData: Record<string, unknown>) => {
     try {
-      const url = editingCourse
-        ? `/api/courses/${editingCourse.id}`
+      const url = courseModal.course
+        ? `/api/courses/${courseModal.course.id}`
         : "/api/courses";
-      const method = editingCourse ? "PUT" : "POST";
+      const method = courseModal.course ? "PUT" : "POST";
 
       const response = await fetch(url, {
         method,
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(courseData),
       });
 
       if (response.ok) {
-        resetForm();
-        fetchData();
+        await fetchData(); // Recharger les données
+      } else {
+        throw new Error('Erreur lors de la sauvegarde');
       }
     } catch (error) {
       console.error("Erreur lors de la sauvegarde:", error);
+      throw error; // Relancer pour que le composant puisse gérer l'erreur
     }
   };
 
-  const handleEdit = (course: Course) => {
-    setEditingCourse(course);
-    setFormData({
-      origine: course.origine,
-      destination: course.destination,
-      dateHeure: new Date(course.dateHeure).toISOString().slice(0, 16),
-      clientId: course.client?.id || "",
-      userId: course.user?.id || "",
-      prix: course.prix?.toString() || "",
-      notes: course.notes || "",
-      statut: course.statut,
-    });
-    setIsDialogOpen(true);
-  };
-
-  const updateStatut = async (courseId: string, newStatut: string) => {
+  const handleStatusUpdate = async (courseId: string, newStatus: string) => {
     try {
       const course = courses.find((c) => c.id === courseId);
-      if (!course) return;
+      if (!course) throw new Error('Course non trouvée');
 
       const response = await fetch(`/api/courses/${courseId}`, {
         method: "PUT",
@@ -345,51 +345,40 @@ export default function CoursesPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          ...course,
-          statut: newStatut,
-          dateHeure: course.dateHeure,
-          clientId: course.client?.id,
-          userId: course.user?.id || null,
+          statut: newStatus
         }),
       });
 
       if (response.ok) {
-        fetchData();
+        await fetchData();
+      } else {
+        throw new Error('Erreur lors de la mise à jour du statut');
       }
     } catch (error) {
       console.error("Erreur lors de la mise à jour du statut:", error);
+      throw error;
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (confirm("Êtes-vous sûr de vouloir supprimer cette course ?")) {
-      try {
-        const response = await fetch(`/api/courses/${id}`, {
-          method: "DELETE",
-        });
-        if (response.ok) {
-          fetchData();
-        }
-      } catch (error) {
-        console.error("Erreur lors de la suppression:", error);
+  const handleDeleteCourse = async (courseId: string) => {
+    try {
+      const response = await fetch(`/api/courses/${courseId}`, {
+        method: "DELETE",
+      });
+      
+      if (response.ok) {
+        await fetchData();
+      } else {
+        throw new Error('Erreur lors de la suppression');
       }
+    } catch (error) {
+      console.error("Erreur lors de la suppression:", error);
+      throw error;
     }
   };
 
-  const resetForm = () => {
-    setFormData({
-      origine: "",
-      destination: "",
-      dateHeure: "",
-      clientId: "",
-      userId: "",
-      prix: "",
-      notes: "",
-      statut: "EN_ATTENTE",
-    });
-    setEditingCourse(null);
-    setIsDialogOpen(false);
-  };
+
+
 
   if (loading) {
     return (
@@ -416,161 +405,12 @@ export default function CoursesPage() {
   return (
     <div className="flex-1 flex flex-col h-full">
       <PageHeader title="Courses">
-        <Dialog
-          open={isDialogOpen}
-          onOpenChange={(open) => {
-            if (!open) resetForm();
-            setIsDialogOpen(open);
-          }}
-        >
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              Nouvelle course
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[500px]">
-            <DialogHeader>
-              <DialogTitle>
-                {editingCourse ? "Modifier la course" : "Nouvelle course"}
-              </DialogTitle>
-              <DialogDescription>
-                {editingCourse
-                  ? "Modifiez les détails de la course."
-                  : "Créer une nouvelle course pour vos clients."}
-              </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="origine">Origine *</Label>
-                  <Input
-                    id="origine"
-                    value={formData.origine}
-                    onChange={(e) =>
-                      setFormData({ ...formData, origine: e.target.value })
-                    }
-                    placeholder="Adresse de départ"
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="destination">Destination *</Label>
-                  <Input
-                    id="destination"
-                    value={formData.destination}
-                    onChange={(e) =>
-                      setFormData({ ...formData, destination: e.target.value })
-                    }
-                    placeholder="Adresse d'arrivée"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="dateHeure">Date et heure *</Label>
-                <Input
-                  id="dateHeure"
-                  type="datetime-local"
-                  value={formData.dateHeure}
-                  onChange={(e) =>
-                    setFormData({ ...formData, dateHeure: e.target.value })
-                  }
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="clientId">Client *</Label>
-                <ClientCombobox
-                  clients={clients}
-                  value={formData.clientId}
-                  onValueChange={(value) =>
-                    setFormData({ ...formData, clientId: value })
-                  }
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="userId">Chauffeur</Label>
-                <Select 
-                  value={formData.userId} 
-                  onValueChange={(value) => setFormData({ ...formData, userId: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Assigner un chauffeur (optionnel)" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">Aucun chauffeur</SelectItem>
-                    {users.map((user) => (
-                      <SelectItem key={user.id} value={user.id}>
-                        {user.nom.toUpperCase()}, {user.prenom}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="prix">Prix (€)</Label>
-                  <Input
-                    id="prix"
-                    type="number"
-                    step="0.01"
-                    value={formData.prix}
-                    onChange={(e) =>
-                      setFormData({ ...formData, prix: e.target.value })
-                    }
-                    placeholder="45.50"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="statut">Statut</Label>
-                  <Select
-                    value={formData.statut}
-                    onValueChange={(value) =>
-                      setFormData({ ...formData, statut: value })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="EN_ATTENTE">En attente</SelectItem>
-                      <SelectItem value="ASSIGNEE">Assignée</SelectItem>
-                      <SelectItem value="EN_COURS">En cours</SelectItem>
-                      <SelectItem value="TERMINEE">Terminée</SelectItem>
-                      <SelectItem value="ANNULEE">Annulée</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="notes">Notes</Label>
-                <Input
-                  id="notes"
-                  value={formData.notes}
-                  onChange={(e) =>
-                    setFormData({ ...formData, notes: e.target.value })
-                  }
-                  placeholder="Instructions spéciales..."
-                />
-              </div>
-
-              <div className="flex justify-end space-x-2">
-                <Button type="button" variant="outline" onClick={resetForm}>
-                  Annuler
-                </Button>
-                <Button type="submit">
-                  {editingCourse ? "Modifier" : "Créer"}
-                </Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
+        <ProtectedComponent permissions={["courses.create"]}>
+          <Button onClick={handleCreateCourse}>
+            <Plus className="mr-2 h-4 w-4" />
+            Nouvelle course
+          </Button>
+        </ProtectedComponent>
       </PageHeader>
 
       <div className="flex-1 p-6 space-y-6">
@@ -584,10 +424,12 @@ export default function CoursesPage() {
               <p className="text-muted-foreground mb-4">
                 Commencez par créer votre première course pour vos clients
               </p>
-              <Button onClick={() => setIsDialogOpen(true)}>
-                <Plus className="mr-2 h-4 w-4" />
-                Nouvelle course
-              </Button>
+              <ProtectedComponent permissions={["courses.create"]}>
+                <Button onClick={handleCreateCourse}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Nouvelle course
+                </Button>
+              </ProtectedComponent>
             </CardContent>
           </Card>
         ) : (
@@ -597,8 +439,9 @@ export default function CoursesPage() {
               title="Courses à venir"
               categories={aVenir}
               onEdit={handleEdit}
-              onDelete={handleDelete}
-              onUpdateStatut={updateStatut}
+              onDelete={handleDeleteCourse}
+              onUpdateStatut={handleStatusUpdate}
+              session={session}
             />
 
             {/* Courses passées */}
@@ -606,12 +449,26 @@ export default function CoursesPage() {
               title="Courses passées"
               categories={passees}
               onEdit={handleEdit}
-              onDelete={handleDelete}
-              onUpdateStatut={updateStatut}
+              onDelete={handleDeleteCourse}
+              onUpdateStatut={handleStatusUpdate}
+              session={session}
             />
           </div>
         )}
       </div>
+
+      {/* Modal unifiée */}
+      <CourseModal
+        isOpen={courseModal.isOpen}
+        onClose={() => setCourseModal({ isOpen: false, course: null, mode: 'create' })}
+        course={courseModal.course}
+        mode={courseModal.mode}
+        clients={clients}
+        users={users}
+        onSave={handleSaveCourse}
+        onStatusUpdate={handleStatusUpdate}
+        onDelete={handleDeleteCourse}
+      />
     </div>
   );
 }

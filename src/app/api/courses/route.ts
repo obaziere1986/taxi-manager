@@ -1,10 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { executeWithRetry } from '@/lib/db'
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const { searchParams } = new URL(request.url)
+    const userId = searchParams.get('userId')
+
     const courses = await executeWithRetry(async (prisma) => {
+      // Si un userId est fourni, récupérer ses courses assignées + les courses non assignées
+      const where = userId ? {
+        OR: [
+          { userId: userId },           // Ses courses assignées
+          { userId: null }              // Courses non assignées
+        ]
+      } : {}
+
       return await prisma.course.findMany({
+        where,
         orderBy: { createdAt: 'desc' },
         include: {
           client: {
@@ -29,7 +41,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { origine, destination, dateHeure, clientId, userId, prix, notes } = body
+    const { origine, destination, dateHeure, clientId, userId, notes, statut } = body
 
     const course = await executeWithRetry(async (prisma) => {
       return await prisma.course.create({
@@ -39,8 +51,8 @@ export async function POST(request: NextRequest) {
           dateHeure: new Date(dateHeure),
           clientId,
           userId: userId || null,
-          prix: prix ? parseFloat(prix) : null,
           notes: notes || null,
+          statut: statut || 'EN_ATTENTE',
         },
         include: {
           client: {

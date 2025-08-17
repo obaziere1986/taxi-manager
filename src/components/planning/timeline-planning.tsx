@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { DndContext, DragEndEvent, useDroppable, useDraggable } from '@dnd-kit/core'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { getDefaultBadge } from '@/lib/badge-utils'
 import { MapPin, Clock, User } from 'lucide-react'
 
 interface Course {
@@ -97,9 +98,12 @@ const CourseTimelineCard = ({ course }: { course: Course }) => {
       <CardContent className="p-2">
         <div className="space-y-1">
           <div className="flex items-center justify-between">
-            <Badge variant="outline" className="text-xs">
-              {timeString}
-            </Badge>
+            (() => {
+              const badgeStyle = getDefaultBadge()
+              return <Badge variant={badgeStyle.variant} className={`${badgeStyle.className} text-xs`}>
+                {timeString}
+              </Badge>
+            })()
             <Badge variant="secondary" className="text-xs">
               {course.statut}
             </Badge>
