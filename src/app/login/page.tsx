@@ -30,7 +30,7 @@ export default function LoginPage() {
         redirect: false
       })
 
-      if (result?.error) {
+      if (result?.error && result.error !== 'undefined') {
         setError('Identifiants incorrects. Veuillez réessayer.')
       } else {
         // Vérifier la session et rediriger
@@ -38,6 +38,8 @@ export default function LoginPage() {
         if (session) {
           router.push('/')
           router.refresh()
+        } else {
+          setError('Erreur de session. Veuillez réessayer.')
         }
       }
     } catch (error) {
@@ -65,7 +67,7 @@ export default function LoginPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4" suppressHydrationWarning>
             <div className="space-y-2">
               <Label htmlFor="login">Login ou Email</Label>
               <Input
@@ -77,6 +79,7 @@ export default function LoginPage() {
                 onChange={handleChange}
                 required
                 disabled={loading}
+                suppressHydrationWarning
               />
             </div>
             <div className="space-y-2">
@@ -90,6 +93,7 @@ export default function LoginPage() {
                 onChange={handleChange}
                 required
                 disabled={loading}
+                suppressHydrationWarning
               />
             </div>
             
@@ -99,7 +103,7 @@ export default function LoginPage() {
               </Alert>
             )}
             
-            <Button type="submit" className="w-full" disabled={loading}>
+            <Button type="submit" className="w-full" disabled={loading} suppressHydrationWarning>
               {loading ? 'Connexion...' : 'Se connecter'}
             </Button>
           </form>
@@ -107,9 +111,9 @@ export default function LoginPage() {
           <div className="mt-6 text-center text-sm text-gray-600">
             <p>Comptes de test disponibles :</p>
             <div className="mt-2 space-y-1 text-xs">
-              <p><strong>Admin:</strong> admin / admin123</p>
-              <p><strong>Planner:</strong> planner / planner123</p>
-              <p><strong>Chauffeur:</strong> daniel / chauffeur123</p>
+              <p><strong>Admin:</strong> jean.dujardin / password123</p>
+              <p><strong>Planner:</strong> marion.cotillard / password123</p>
+              <p><strong>Chauffeur:</strong> omar.sy / password123</p>
             </div>
           </div>
         </CardContent>

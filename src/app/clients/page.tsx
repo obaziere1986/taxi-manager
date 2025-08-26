@@ -2,18 +2,21 @@
 
 import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { PageHeader } from '@/components/page-header'
 import { ProtectedComponent } from '@/components/auth/ProtectedComponent'
-import { Users, Phone, Mail, Plus, Edit, Trash2, Clock, MapPin } from 'lucide-react'
+import { PhoneInput } from '@/components/ui/phone-input'
+import { formatPhoneDisplay } from '@/lib/phone-utils'
+import { Users, Phone, Mail, Plus, Edit, Trash2, MapPin } from 'lucide-react'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import { getCourseStatusBadge, formatStatut } from '@/lib/badge-utils'
+import { CourseModal } from "@/components/courses/CourseModal"
 
 interface Client {
   id: string
@@ -34,6 +37,11 @@ interface Course {
   dateHeure: string
   statut: string
   notes?: string
+  chauffeur?: {
+    id: string
+    nom: string
+    prenom: string
+  } | null
 }
 
 interface ClientWithStats extends Client {
@@ -54,9 +62,18 @@ export default function ClientsPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingClient, setEditingClient] = useState<Partial<Client>>({})
   const [isCreating, setIsCreating] = useState(false)
+  const [courseModal, setCourseModal] = useState<{
+    isOpen: boolean;
+    course?: Course | null;
+    mode: 'view' | 'edit';
+  }>({ isOpen: false, course: null, mode: 'view' })
+  const [allClients, setAllClients] = useState<Client[]>([])
+  const [users, setUsers] = useState<any[]>([])
 
   useEffect(() => {
     fetchClients()
+    fetchAllClientsForModal()
+    fetchUsers()
   }, [])
 
   const fetchClients = async () => {
@@ -108,6 +125,121 @@ export default function ClientsPage() {
     }
   }
 
+  const fetchAllClientsForModal = async () => {
+    try {
+      const response = await fetch('/api/clients?simple=true')
+      const data = await response.json()
+      if (Array.isArray(data)) {
+        setAllClients(data)
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement des clients pour modal:', error)
+    }
+  }
+
+  const fetchUsers = async () => {
+    try {
+      const response = await fetch('/api/users')
+      const data = await response.json()
+      if (Array.isArray(data)) {
+        setUsers(data.filter(user => user.role === 'Chauffeur'))
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement des utilisateurs:', error)
+    }
+  }
+
+  const handleCoursesSave = async (courseData: any) => {
+    try {
+      const url = courseModal.course
+        ? `/api/courses/${courseModal.course.id}`
+        : "/api/courses";
+      const method = courseModal.course ? "PUT" : "POST";
+
+      const response = await fetch(url, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(courseData),
+      });
+
+      if (response.ok) {
+        await fetchClients(); // Recharger les données des clients
+        // Si un client est sélectionné, recharger ses données aussi
+        if (selectedClient) {
+          await refreshSelectedClient(selectedClient.id);
+        }
+      } else {
+        throw new Error('Erreur lors de la sauvegarde');
+      }
+    } catch (error) {
+      console.error("Erreur lors de la sauvegarde:", error);
+      throw error;
+    }
+  }
+
+  const handleStatusUpdate = async (courseId: string, newStatus: string) => {
+    try {
+      const response = await fetch(`/api/courses/${courseId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          statut: newStatus
+        }),
+      });
+
+      if (response.ok) {
+        await fetchClients();
+        // Si un client est sélectionné, recharger ses données aussi
+        if (selectedClient) {
+          await refreshSelectedClient(selectedClient.id);
+        }
+      } else {
+        throw new Error('Erreur lors de la mise à jour du statut');
+      }
+    } catch (error) {
+      console.error("Erreur lors de la mise à jour du statut:", error);
+      throw error;
+    }
+  }
+
+  const handleDeleteCourse = async (courseId: string) => {
+    try {
+      const response = await fetch(`/api/courses/${courseId}`, {
+        method: "DELETE",
+      });
+      
+      if (response.ok) {
+        await fetchClients();
+        // Si un client est sélectionné, recharger ses données aussi
+        if (selectedClient) {
+          await refreshSelectedClient(selectedClient.id);
+        }
+      } else {
+        throw new Error('Erreur lors de la suppression');
+      }
+    } catch (error) {
+      console.error("Erreur lors de la suppression:", error);
+      throw error;
+    }
+  }
+
+  const refreshSelectedClient = async (clientId: string) => {
+    try {
+      const response = await fetch(`/api/clients/${clientId}`)
+      const updatedClient = await response.json()
+      
+      if (response.ok) {
+        setSelectedClient(updatedClient)
+      }
+    } catch (error) {
+      console.error("Erreur lors du rechargement du client:", error)
+    }
+  }
+
   const filteredClients = clients.filter(client =>
     `${client.nom} ${client.prenom}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
     client.telephone.includes(searchTerm) ||
@@ -139,7 +271,7 @@ export default function ClientsPage() {
   }
 
   const handleDelete = async (clientId: string) => {
-    if (!confirm('Etes-vous sur de vouloir supprimer ce client ?')) return
+    if (!confirm('Êtes-vous sûr de vouloir supprimer ce client ?')) return
     
     try {
       const response = await fetch(`/api/clients/${clientId}`, {
@@ -222,72 +354,84 @@ export default function ClientsPage() {
                 </span>
               </div>
               
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {clientsGroup.map((client) => (
-                  <Card key={client.id} className="hover:shadow-md transition-shadow cursor-pointer"
-                        onClick={() => openClientDetails(client)}>
-                    <CardHeader className="pb-3">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <CardTitle className="text-base">
+              <div className="border rounded-lg">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[25%]">Client</TableHead>
+                      <TableHead className="w-[35%]">Contact</TableHead>
+                      <TableHead className="w-[15%] text-center">Courses</TableHead>
+                      <TableHead className="w-[15%] text-center">Dernière course</TableHead>
+                      <TableHead className="w-[10%]">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {clientsGroup.map((client) => (
+                      <TableRow key={client.id} className="hover:bg-muted/50 cursor-pointer"
+                                onClick={() => openClientDetails(client)}>
+                        <TableCell>
+                          <div className="font-medium">
                             {client.nom.toUpperCase()}, {client.prenom}
-                          </CardTitle>
-                          <CardDescription className="flex items-center gap-1 mt-1">
-                            <Phone className="h-3 w-3" />
-                            {client.telephone}
-                          </CardDescription>
-                          {client.email && (
-                            <CardDescription className="flex items-center gap-1">
-                              <Mail className="h-3 w-3" />
-                              {client.email}
-                            </CardDescription>
-                          )}
-                        </div>
-                        <div className="flex gap-1">
-                          <ProtectedComponent permissions={["clients.update"]}>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                openClientDetails(client)
-                              }}
-                            >
-                              <Edit className="h-3 w-3" />
-                            </Button>
-                          </ProtectedComponent>
-                          <ProtectedComponent permissions={["clients.delete"]}>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                handleDelete(client.id)
-                              }}
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                          </ProtectedComponent>
-                        </div>
-                      </div>
-                    </CardHeader>
-                    
-                    <CardContent className="pt-0">
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between text-sm">
-                          <span>Courses totales</span>
-                          <span className="font-medium">{client.totalCourses}</span>
-                        </div>
-                        {client.derniereCourse && (
-                          <div className="text-xs text-muted-foreground flex items-center gap-1">
-                            <Clock className="h-3 w-3" />
-                            Dernière: {format(client.derniereCourse, 'dd MMM yyyy', { locale: fr })}
                           </div>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-1 text-sm">
+                              <Phone className="h-3 w-3" />
+                              {formatPhoneDisplay(client.telephone)}
+                            </div>
+                            {client.email && (
+                              <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                                <Mail className="h-3 w-3" />
+                                {client.email}
+                              </div>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <span className="font-medium">{client.totalCourses}</span>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {client.derniereCourse && !isNaN(new Date(client.derniereCourse).getTime()) ? (
+                            <div className="text-sm text-muted-foreground">
+                              {format(new Date(client.derniereCourse), 'dd/MM/yy', { locale: fr })}
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground text-sm">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex gap-1">
+                            <ProtectedComponent permissions={["clients.update"]}>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  openClientDetails(client)
+                                }}
+                              >
+                                <Edit className="h-3 w-3" />
+                              </Button>
+                            </ProtectedComponent>
+                            <ProtectedComponent permissions={["clients.delete"]}>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleDelete(client.id)
+                                }}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </ProtectedComponent>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </div>
             </div>
           ))}
@@ -296,7 +440,7 @@ export default function ClientsPage() {
         {filteredClients.length === 0 && !loading && (
           <div className="text-center py-12 text-muted-foreground">
             <Users className="h-12 w-12 mx-auto mb-4 opacity-20" />
-            <p>Aucun client trouve</p>
+            <p>Aucun client trouvé</p>
             {searchTerm && (
               <p className="text-sm">Essayez de modifier votre recherche</p>
             )}
@@ -324,23 +468,23 @@ export default function ClientsPage() {
                 />
               </div>
               <div>
-                <Label htmlFor="prenom">Prenom *</Label>
+                <Label htmlFor="prenom">Prénom *</Label>
                 <Input
                   id="prenom"
                   value={editingClient.prenom || ''}
                   onChange={(e) => setEditingClient({ ...editingClient, prenom: e.target.value })}
-                  placeholder="Prenom"
+                  placeholder="Prénom"
                 />
               </div>
             </div>
             
             <div>
-              <Label htmlFor="telephone">Telephone *</Label>
-              <Input
+              <PhoneInput
                 id="telephone"
+                label="Téléphone *"
                 value={editingClient.telephone || ''}
-                onChange={(e) => setEditingClient({ ...editingClient, telephone: e.target.value })}
-                placeholder="06 12 34 56 78"
+                onChange={(value) => setEditingClient({ ...editingClient, telephone: value })}
+                required
               />
             </div>
             
@@ -363,7 +507,7 @@ export default function ClientsPage() {
                 onClick={handleSave}
                 disabled={!editingClient.nom || !editingClient.prenom || !editingClient.telephone}
               >
-                {isCreating ? 'Creer' : 'Enregistrer'}
+                {isCreating ? 'Créer' : 'Enregistrer'}
               </Button>
             </div>
           </div>
@@ -371,86 +515,202 @@ export default function ClientsPage() {
       </Dialog>
 
       <Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
-        <DialogContent className="max-w-3xl max-h-[85vh] overflow-hidden">
-          <DialogHeader>
-            <DialogTitle>
-              {selectedClient?.nom.toUpperCase()}, {selectedClient?.prenom}
-            </DialogTitle>
+        <DialogContent className="max-w-[95vw] sm:max-w-5xl h-[85vh] max-h-[85vh] flex flex-col overflow-hidden">
+          <DialogHeader className="flex-shrink-0 pb-4 border-b">
+            <div className="flex items-start justify-between">
+              <div className="flex-1">
+                <DialogTitle className="text-xl">
+                  {selectedClient?.nom.toUpperCase()}, {selectedClient?.prenom}
+                </DialogTitle>
+                
+                {selectedClient && (
+                  <div className="flex items-center gap-2 mt-2 flex-wrap">
+                    <Badge variant="secondary" className="text-xs font-medium">
+                      Total: {selectedClient.totalCourses}
+                    </Badge>
+                    {selectedClient.coursesEnAttente > 0 && (
+                      <Badge variant="outline" className="text-xs border-orange-200 text-orange-700 bg-orange-50">
+                        🟠 {selectedClient.coursesEnAttente} En attente
+                      </Badge>
+                    )}
+                    {selectedClient.coursesAssignees > 0 && (
+                      <Badge variant="outline" className="text-xs border-blue-200 text-blue-700 bg-blue-50">
+                        🔵 {selectedClient.coursesAssignees} En cours
+                      </Badge>
+                    )}
+                    {selectedClient.coursesTerminees > 0 && (
+                      <Badge variant="outline" className="text-xs border-green-200 text-green-700 bg-green-50">
+                        🟢 {selectedClient.coursesTerminees} Terminées
+                      </Badge>
+                    )}
+                    {selectedClient.coursesAnnulees > 0 && (
+                      <Badge variant="outline" className="text-xs border-red-200 text-red-700 bg-red-50">
+                        🔴 {selectedClient.coursesAnnulees} Annulées
+                      </Badge>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
           </DialogHeader>
           
           {selectedClient && (
-            <Tabs defaultValue="courses" className="flex flex-col h-full">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="courses">Courses & Statistiques</TabsTrigger>
-                <TabsTrigger value="infos">Informations</TabsTrigger>
+            <Tabs defaultValue="courses" className="flex flex-col flex-1 min-h-0">
+              <TabsList className="grid w-full grid-cols-2 flex-shrink-0">
+                <TabsTrigger value="courses">
+                  <MapPin className="h-4 w-4 mr-2" />
+                  Courses
+                </TabsTrigger>
+                <TabsTrigger value="infos">
+                  <Edit className="h-4 w-4 mr-2" />
+                  Informations
+                </TabsTrigger>
               </TabsList>
               
-              <div className="flex-1 overflow-hidden">
-                <TabsContent value="courses" className="space-y-4 h-full overflow-y-auto">
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <h3 className="text-sm font-medium text-gray-700 mb-3">Statistiques des courses</h3>
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-center py-1">
-                        <span className="text-sm text-gray-600">Total des courses</span>
-                        <span className="font-semibold text-lg">{selectedClient.totalCourses}</span>
-                      </div>
-                      <div className="flex justify-between items-center py-1">
-                        <span className="text-sm text-gray-600">• En attente</span>
-                        <span className="font-medium text-gray-700">{selectedClient.coursesEnAttente}</span>
-                      </div>
-                      <div className="flex justify-between items-center py-1">
-                        <span className="text-sm text-blue-600">• Assignées</span>
-                        <span className="font-medium text-blue-700">{selectedClient.coursesAssignees}</span>
-                      </div>
-                      <div className="flex justify-between items-center py-1">
-                        <span className="text-sm text-green-600">• Terminées</span>
-                        <span className="font-medium text-green-700">{selectedClient.coursesTerminees}</span>
-                      </div>
-                      <div className="flex justify-between items-center py-1">
-                        <span className="text-sm text-red-600">• Annulées</span>
-                        <span className="font-medium text-red-700">{selectedClient.coursesAnnulees}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div>
-                    <h3 className="text-lg font-semibold mb-3">Historique des courses</h3>
-                    <div className="space-y-2 max-h-96 overflow-y-auto">
-                      {selectedClient.courses && selectedClient.courses.length > 0 ? (
-                        selectedClient.courses
-                          .sort((a, b) => new Date(b.dateHeure).getTime() - new Date(a.dateHeure).getTime())
-                          .map((course) => (
-                          <div key={course.id} className="border rounded p-3">
-                            <div className="flex justify-between items-start mb-2">
-                              <div className="flex items-center gap-2">
-                                <MapPin className="h-4 w-4" />
-                                <span className="font-medium">
-                                  {course.origine} → {course.destination}
-                                </span>
-                              </div>
-                              <Badge 
-                                variant={getCourseStatusBadge(course.statut).variant}
-                                className={getCourseStatusBadge(course.statut).className}
-                              >
-                                {formatStatut(course.statut)}
+              <div className="flex-1 min-h-0 mt-4">
+                <TabsContent value="courses" className="h-full m-0 data-[state=active]:h-full data-[state=active]:overflow-hidden">
+                  {selectedClient.courses && selectedClient.courses.length > 0 ? (
+                    <div className="h-full overflow-y-auto space-y-4 pr-4">
+                      {(() => {
+                        const currentYear = new Date().getFullYear()
+                        const coursesByPeriod: Record<string, Course[]> = {}
+                        
+                        selectedClient.courses.forEach(course => {
+                          const courseDate = new Date(course.dateHeure)
+                          const courseYear = courseDate.getFullYear()
+                          
+                          let periodKey: string
+                          if (courseYear === currentYear) {
+                            periodKey = format(courseDate, 'MMMM yyyy', { locale: fr })
+                          } else {
+                            periodKey = courseYear.toString()
+                          }
+                          
+                          if (!coursesByPeriod[periodKey]) {
+                            coursesByPeriod[periodKey] = []
+                          }
+                          coursesByPeriod[periodKey].push(course)
+                        })
+                        
+                        return Object.entries(coursesByPeriod)
+                          .sort(([a], [b]) => {
+                            // Trier par date décroissante
+                            const aDate = new Date(coursesByPeriod[a][0].dateHeure)
+                            const bDate = new Date(coursesByPeriod[b][0].dateHeure)
+                            return bDate.getTime() - aDate.getTime()
+                          })
+                          .map(([period, courses]) => (
+                          <div key={period} className="space-y-3">
+                            <div className="flex items-center gap-2">
+                              <h4 className="font-semibold text-base">{period}</h4>
+                              <Badge variant="outline" className="text-xs">
+                                {courses.length} course{courses.length > 1 ? 's' : ''}
                               </Badge>
                             </div>
-                            <div className="flex justify-between items-center text-sm text-muted-foreground">
-                              <span>{format(new Date(course.dateHeure), 'dd MMM yyyy à HH:mm', { locale: fr })}</span>
+                            
+                            <div className="border rounded-lg">
+                              <Table>
+                                <TableHeader>
+                                  <TableRow>
+                                    <TableHead className="w-[120px]">Date & Heure</TableHead>
+                                    <TableHead className="min-w-[350px]">Trajet</TableHead>
+                                    <TableHead className="w-[140px]">Chauffeur</TableHead>
+                                    <TableHead className="w-[100px] text-center">Statut</TableHead>
+                                    <TableHead className="w-[200px]">Notes</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {courses
+                                    .sort((a, b) => new Date(b.dateHeure).getTime() - new Date(a.dateHeure).getTime())
+                                    .map((course) => (
+                                    <TableRow 
+                                      key={course.id} 
+                                      className="hover:bg-muted/50 cursor-pointer"
+                                      onClick={() => {
+                                        // Transformer la structure pour CourseModal
+                                        const transformedCourse = {
+                                          ...course,
+                                          client: {
+                                            id: selectedClient.id,
+                                            nom: selectedClient.nom,
+                                            prenom: selectedClient.prenom,
+                                            telephone: selectedClient.telephone,
+                                            email: selectedClient.email
+                                          },
+                                          user: course.chauffeur ? {
+                                            id: course.chauffeur.id,
+                                            nom: course.chauffeur.nom,
+                                            prenom: course.chauffeur.prenom
+                                          } : null
+                                        };
+                                        setCourseModal({ isOpen: true, course: transformedCourse, mode: 'view' });
+                                      }}
+                                    >
+                                      <TableCell className="font-mono text-sm">
+                                        <div className="space-y-1">
+                                          {(() => {
+                                            if (!course.dateHeure) return <div className="text-muted-foreground text-xs">Date invalide</div>
+                                            const courseDate = new Date(course.dateHeure)
+                                            if (isNaN(courseDate.getTime())) return <div className="text-muted-foreground text-xs">Date invalide</div>
+                                            return (
+                                              <>
+                                                <div>{format(courseDate, 'dd/MM/yy', { locale: fr })}</div>
+                                                <div className="text-muted-foreground text-xs">{format(courseDate, 'HH:mm', { locale: fr })}</div>
+                                              </>
+                                            )
+                                          })()}
+                                        </div>
+                                      </TableCell>
+                                      <TableCell>
+                                        <div className="flex items-center gap-2">
+                                          <MapPin className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                                          <span className="font-medium text-sm">
+                                            {course.origine} → {course.destination}
+                                          </span>
+                                        </div>
+                                      </TableCell>
+                                      <TableCell className="text-sm">
+                                        {course.chauffeur ? (
+                                          <span className="font-medium">
+                                            {course.chauffeur.prenom} {course.chauffeur.nom.charAt(0).toUpperCase()}.
+                                          </span>
+                                        ) : (
+                                          <span className="text-muted-foreground">Non assigné</span>
+                                        )}
+                                      </TableCell>
+                                      <TableCell className="text-center">
+                                        <Badge 
+                                          variant={getCourseStatusBadge(course.statut).variant}
+                                          className={`${getCourseStatusBadge(course.statut).className} text-xs px-2 py-1`}
+                                        >
+                                          {formatStatut(course.statut)}
+                                        </Badge>
+                                      </TableCell>
+                                      <TableCell>
+                                        {course.notes ? (
+                                          <span className="text-sm text-muted-foreground block" title={course.notes}>
+                                            {course.notes}
+                                          </span>
+                                        ) : (
+                                          <span className="text-muted-foreground text-sm">-</span>
+                                        )}
+                                      </TableCell>
+                                    </TableRow>
+                                  ))}
+                                </TableBody>
+                              </Table>
                             </div>
-                            {course.notes && (
-                              <p className="text-sm text-muted-foreground mt-1">{course.notes}</p>
-                            )}
                           </div>
                         ))
-                      ) : (
-                        <div className="text-center py-8 text-muted-foreground">
-                          <MapPin className="h-12 w-12 mx-auto mb-4 opacity-20" />
-                          <p>Aucune course enregistrée</p>
-                        </div>
-                      )}
+                      })()
+                    }
                     </div>
-                  </div>
+                  ) : (
+                    <div className="text-center py-12 text-muted-foreground">
+                      <MapPin className="h-12 w-12 mx-auto mb-4 opacity-20" />
+                      <p>Aucune course enregistrée</p>
+                    </div>
+                  )}
                 </TabsContent>
                 
                 <TabsContent value="infos" className="space-y-4">
@@ -473,11 +733,12 @@ export default function ClientsPage() {
                         />
                       </div>
                       <div>
-                        <Label htmlFor="editTelephone">Téléphone</Label>
-                        <Input
+                        <PhoneInput
                           id="editTelephone"
+                          label="Téléphone"
                           value={editingClient.telephone || selectedClient.telephone}
-                          onChange={(e) => setEditingClient({ ...editingClient, telephone: e.target.value })}
+                          onChange={(value) => setEditingClient({ ...editingClient, telephone: value })}
+                          required
                         />
                       </div>
                       <div>
@@ -553,6 +814,18 @@ export default function ClientsPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      <CourseModal
+        isOpen={courseModal.isOpen}
+        onClose={() => setCourseModal({ isOpen: false, course: null, mode: 'view' })}
+        course={courseModal.course}
+        mode={courseModal.mode}
+        clients={allClients}
+        users={users}
+        onSave={handleCoursesSave}
+        onStatusUpdate={handleStatusUpdate}
+        onDelete={handleDeleteCourse}
+      />
     </div>
   )
 }

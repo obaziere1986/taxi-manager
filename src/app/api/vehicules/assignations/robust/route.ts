@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { executeWithRetry } from '@/lib/supabase'
 
 export async function GET(request: NextRequest) {
   try {
@@ -8,54 +8,56 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const vehiculeId = searchParams.get('vehiculeId')
     
-    // Construire la clause WHERE
-    const whereClause = vehiculeId ? { vehiculeId: vehiculeId } : {}
-    console.log('🎯 Clause WHERE:', whereClause)
-    
     // Requête simple d'abord
-    const assignationsBasic = await prisma.vehiculeAssignation.findMany({
-      where: whereClause,
-      select: {
-        id: true,
-        actif: true,
-        dateDebut: true,
-        dateFin: true,
-        vehiculeId: true,
-        userId: true
-      },
-      orderBy: [
-        { actif: 'desc' },
-        { dateDebut: 'desc' }
-      ]
+    const assignationsBasic = await executeWithRetry(async (supabase) => {
+      let query = supabase
+        .from('vehicule_assignations')
+        .select('id, actif, date_debut, date_fin, vehicule_id, user_id')
+        .order('actif', { ascending: false })
+        .order('date_debut', { ascending: false })
+      
+      if (vehiculeId) {
+        query = query.eq('vehicule_id', vehiculeId)
+      }
+      
+      const { data, error } = await query
+      if (error) throw error
+      return data || []
     })
+    
+    console.log('🎯 Filtre vehiculeId:', vehiculeId)
     
     console.log(`📊 ${assignationsBasic.length} assignations de base trouvées`)
 
     // Maintenant ajouter les relations
-    const assignations = await prisma.vehiculeAssignation.findMany({
-      where: whereClause,
-      include: {
-        vehicule: {
-          select: {
-            id: true,
-            marque: true,
-            modele: true,
-            immatriculation: true
-          }
-        },
-        user: {
-          select: {
-            id: true,
-            nom: true,
-            prenom: true,
-            role: true
-          }
-        }
-      },
-      orderBy: [
-        { actif: 'desc' },
-        { dateDebut: 'desc' }
-      ]
+    const assignations = await executeWithRetry(async (supabase) => {
+      let query = supabase
+        .from('vehicule_assignations')
+        .select(`
+          *,
+          vehicule:vehicules(
+            id,
+            marque,
+            modele,
+            immatriculation
+          ),
+          user:users(
+            id,
+            nom,
+            prenom,
+            role
+          )
+        `)
+        .order('actif', { ascending: false })
+        .order('date_debut', { ascending: false })
+      
+      if (vehiculeId) {
+        query = query.eq('vehicule_id', vehiculeId)
+      }
+      
+      const { data, error } = await query
+      if (error) throw error
+      return data || []
     })
 
     console.log(`✅ ${assignations.length} assignations avec relations récupérées`)
@@ -69,10 +71,15 @@ export async function GET(request: NextRequest) {
     // Transformer les dates en strings pour éviter les problèmes de sérialisation
     const assignationsSerializable = assignations.map(a => ({
       ...a,
-      dateDebut: a.dateDebut.toISOString(),
-      dateFin: a.dateFin?.toISOString() || null,
-      createdAt: a.createdAt.toISOString(),
-      updatedAt: a.updatedAt.toISOString()
+      dateDebut: a.date_debut,
+      dateFin: a.date_fin || null,
+      createdAt: a.created_at,
+      updatedAt: a.updated_at,
+      // Mapping pour compatibilité
+      date_debut: a.date_debut,
+      date_fin: a.date_fin,
+      vehiculeId: a.vehicule_id,
+      userId: a.user_id
     }))
 
     console.log('🚀 Envoi de la réponse...')

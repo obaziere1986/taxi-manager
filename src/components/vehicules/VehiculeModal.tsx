@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
+import { PlateInput } from "@/components/ui/plate-input"
 import { format } from 'date-fns'
 import { Car, User, ArrowRight, History } from 'lucide-react'
 import { getDefaultBadge, getAssignationBadge } from '@/lib/badge-utils'
@@ -200,12 +201,11 @@ export function VehiculeModal({ isOpen, onClose, onSave, vehicule, mode }: Vehic
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="immatriculation">Immatriculation *</Label>
-                <Input
+                <PlateInput
                   id="immatriculation"
+                  label="Immatriculation *"
                   value={formData.immatriculation || ''}
-                  onChange={(e) => setFormData({ ...formData, immatriculation: e.target.value.toUpperCase() })}
-                  placeholder="AB-123-CD"
+                  onChange={(value) => setFormData({ ...formData, immatriculation: value })}
                   required
                 />
               </div>
@@ -377,12 +377,11 @@ export function VehiculeModal({ isOpen, onClose, onSave, vehicule, mode }: Vehic
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="immatriculation">Immatriculation *</Label>
-                      <Input
+                      <PlateInput
                         id="immatriculation"
+                        label="Immatriculation *"
                         value={formData.immatriculation || ''}
-                        onChange={(e) => setFormData({ ...formData, immatriculation: e.target.value.toUpperCase() })}
-                        placeholder="AB-123-CD"
+                        onChange={(value) => setFormData({ ...formData, immatriculation: value })}
                         required
                       />
                     </div>

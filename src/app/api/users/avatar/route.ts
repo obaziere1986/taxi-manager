@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
+import { executeWithRetry } from '@/lib/supabase'
 import { writeFile, mkdir } from 'fs/promises'
 import { join } from 'path'
 import { existsSync } from 'fs'
@@ -58,18 +58,21 @@ export async function POST(request: NextRequest) {
     const avatarUrl = `/uploads/avatars/${filename}`
 
     // Mettre à jour l'utilisateur en base
-    const updatedUser = await prisma.user.update({
-      where: { id: session.user.id },
-      data: { avatarUrl },
-      select: {
-        id: true,
-        avatarUrl: true
-      }
+    const updatedUser = await executeWithRetry(async (supabase) => {
+      const { data, error } = await supabase
+        .from('users')
+        .update({ avatar_url: avatarUrl })
+        .eq('id', session.user.id)
+        .select('id, avatar_url')
+        .single()
+      
+      if (error) throw error
+      return data
     })
 
     return NextResponse.json({ 
       success: true, 
-      avatarUrl: updatedUser.avatarUrl 
+      avatarUrl: updatedUser.avatar_url 
     })
 
   } catch (error) {
@@ -88,9 +91,14 @@ export async function DELETE() {
     }
 
     // Supprimer l'URL d'avatar de la base
-    await prisma.user.update({
-      where: { id: session.user.id },
-      data: { avatarUrl: null }
+    await executeWithRetry(async (supabase) => {
+      const { error } = await supabase
+        .from('users')
+        .update({ avatar_url: null })
+        .eq('id', session.user.id)
+      
+      if (error) throw error
+      return true
     })
 
     return NextResponse.json({ success: true })

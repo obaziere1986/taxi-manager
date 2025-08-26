@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server'
-import { executeWithRetry } from '@/lib/db'
+import { executeWithRetry } from '@/lib/supabase'
 import { startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subDays, subWeeks, subMonths } from 'date-fns'
 
 export async function GET() {
   try {
-    const revenueStats = await executeWithRetry(async (prisma) => {
+    const revenueStats = await executeWithRetry(async (supabase) => {
       const now = new Date()
 
       // Aujourd'hui
@@ -34,56 +34,84 @@ export async function GET() {
       const lastMonthStart = startOfMonth(lastMonth)
       const lastMonthEnd = endOfMonth(lastMonth)
 
-      // Récupérer les courses terminées pour chaque période
+      // Récupérer les courses terminées pour chaque période avec Supabase
       const [
-        coursesToday,
-        coursesYesterday,
-        coursesThisWeek,
-        coursesLastWeek,
-        coursesThisMonth,
-        coursesLastMonth
+        coursesTodayResult,
+        coursesYesterdayResult,
+        coursesThisWeekResult,
+        coursesLastWeekResult,
+        coursesThisMonthResult,
+        coursesLastMonthResult
       ] = await Promise.all([
-        prisma.course.findMany({
-          where: {
-            statut: 'TERMINEE',
-            dateHeure: { gte: todayStart, lte: todayEnd }
-          }
-        }),
-        prisma.course.findMany({
-          where: {
-            statut: 'TERMINEE',
-            dateHeure: { gte: yesterdayStart, lte: yesterdayEnd }
-          }
-        }),
-        prisma.course.findMany({
-          where: {
-            statut: 'TERMINEE',
-            dateHeure: { gte: weekStart, lte: weekEnd }
-          }
-        }),
-        prisma.course.findMany({
-          where: {
-            statut: 'TERMINEE',
-            dateHeure: { gte: lastWeekStart, lte: lastWeekEnd }
-          }
-        }),
-        prisma.course.findMany({
-          where: {
-            statut: 'TERMINEE',
-            dateHeure: { gte: monthStart, lte: monthEnd }
-          }
-        }),
-        prisma.course.findMany({
-          where: {
-            statut: 'TERMINEE',
-            dateHeure: { gte: lastMonthStart, lte: lastMonthEnd }
-          }
-        })
+        supabase
+          .from('courses')
+          .select('prix')
+          .eq('statut', 'TERMINEE')
+          .gte('date_heure', todayStart.toISOString())
+          .lte('date_heure', todayEnd.toISOString()),
+        supabase
+          .from('courses')
+          .select('prix')
+          .eq('statut', 'TERMINEE')
+          .gte('date_heure', yesterdayStart.toISOString())
+          .lte('date_heure', yesterdayEnd.toISOString()),
+        supabase
+          .from('courses')
+          .select('prix')
+          .eq('statut', 'TERMINEE')
+          .gte('date_heure', weekStart.toISOString())
+          .lte('date_heure', weekEnd.toISOString()),
+        supabase
+          .from('courses')
+          .select('prix')
+          .eq('statut', 'TERMINEE')
+          .gte('date_heure', lastWeekStart.toISOString())
+          .lte('date_heure', lastWeekEnd.toISOString()),
+        supabase
+          .from('courses')
+          .select('prix')
+          .eq('statut', 'TERMINEE')
+          .gte('date_heure', monthStart.toISOString())
+          .lte('date_heure', monthEnd.toISOString()),
+        supabase
+          .from('courses')
+          .select('prix')
+          .eq('statut', 'TERMINEE')
+          .gte('date_heure', lastMonthStart.toISOString())
+          .lte('date_heure', lastMonthEnd.toISOString())
       ])
 
+      // Vérifier les erreurs
+      const results = [
+        coursesTodayResult,
+        coursesYesterdayResult,
+        coursesThisWeekResult,
+        coursesLastWeekResult,
+        coursesThisMonthResult,
+        coursesLastMonthResult
+      ]
+
+      for (const result of results) {
+        if (result.error) {
+          console.error('Erreur lors de la récupération des courses:', result.error)
+          throw result.error
+        }
+      }
+
+      // Extraire les données
+      const coursesToday = coursesTodayResult.data || []
+      const coursesYesterday = coursesYesterdayResult.data || []
+      const coursesThisWeek = coursesThisWeekResult.data || []
+      const coursesLastWeek = coursesLastWeekResult.data || []
+      const coursesThisMonth = coursesThisMonthResult.data || []
+      const coursesLastMonth = coursesLastMonthResult.data || []
+
       // Calculer les revenus
-      const calculateRevenue = (courses: { prix?: number | null }[]) => 
-        courses.reduce((sum, course) => sum + (course.prix || 0), 0)
+      const calculateRevenue = (courses: { prix?: string | number | null }[]) => 
+        courses.reduce((sum, course) => {
+          const prix = course.prix ? parseFloat(course.prix.toString()) : 0
+          return sum + (prix || 0)
+        }, 0)
 
       const revenueToday = calculateRevenue(coursesToday)
       const revenueYesterday = calculateRevenue(coursesYesterday)

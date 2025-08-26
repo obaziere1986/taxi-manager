@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { executeWithRetry } from '@/lib/supabase'
 import { format, startOfDay, endOfDay } from 'date-fns'
 import { fr } from 'date-fns/locale'
 
@@ -85,46 +85,46 @@ async function getPlanningData(date: Date, chauffeurId?: string, type: string = 
 
   try {
     // Récupérer les courses pour la date donnée
-    const courses = await prisma.course.findMany({
-      where: {
-        dateHeure: {
-          gte: dayStart,
-          lte: dayEnd
-        },
-        ...(chauffeurId && { chauffeurId })
-      },
-      include: {
-        client: {
-          select: {
-            nom: true,
-            prenom: true,
-            telephone: true
-          }
-        },
-        chauffeur: {
-          select: {
-            nom: true,
-            prenom: true,
-            telephone: true,
-            vehicule: true
-          }
-        }
-      },
-      orderBy: {
-        dateHeure: 'asc'
+    const courses = await executeWithRetry(async (supabase) => {
+      let query = supabase
+        .from('courses')
+        .select(`
+          *,
+          client:clients(
+            nom,
+            prenom,
+            telephone
+          ),
+          user:users(
+            nom,
+            prenom,
+            telephone,
+            vehicule_id
+          )
+        `)
+        .gte('date_heure', dayStart.toISOString())
+        .lte('date_heure', dayEnd.toISOString())
+        .order('date_heure', { ascending: true })
+      
+      if (chauffeurId) {
+        query = query.eq('user_id', chauffeurId)
       }
+      
+      const { data, error } = await query
+      if (error) throw error
+      return data || []
     })
 
-    // Récupérer tous les chauffeurs si pas de chauffeur spécifique
-    const chauffeurs = chauffeurId ? [] : await prisma.chauffeur.findMany({
-      where: {
-        statut: {
-          in: ['DISPONIBLE', 'OCCUPE']
-        }
-      },
-      orderBy: {
-        nom: 'asc'
-      }
+    // Récupérer tous les utilisateurs/chauffeurs si pas de chauffeur spécifique
+    const chauffeurs = chauffeurId ? [] : await executeWithRetry(async (supabase) => {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .in('statut', ['DISPONIBLE', 'OCCUPE'])
+        .order('nom', { ascending: true })
+      
+      if (error) throw error
+      return data || []
     })
 
     return {

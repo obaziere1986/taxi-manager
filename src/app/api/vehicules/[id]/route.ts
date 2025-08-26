@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { executeWithRetry } from '@/lib/db'
+import { executeWithRetry } from '@/lib/supabase'
 
 // GET - Récupérer un véhicule par ID
 export async function GET(
@@ -8,35 +8,27 @@ export async function GET(
 ) {
   try {
     const { id } = await params
-    const vehicule = await executeWithRetry(async (prisma) => {
-      return await prisma.vehicule.findUnique({
-        where: { id },
-        include: {
-          users: {
-            select: {
-              id: true,
-              nom: true,
-              prenom: true,
-              telephone: true,
-              role: true,
-              statut: true
-            }
-          },
-          assignations: {
-            where: { actif: true },
-            include: {
-              user: {
-                select: {
-                  id: true,
-                  nom: true,
-                  prenom: true,
-                  role: true
-                }
-              }
-            }
-          }
-        }
-      })
+    const vehicule = await executeWithRetry(async (supabase) => {
+      const { data, error } = await supabase
+        .from('vehicules')
+        .select(`
+          *,
+          assignations:vehicule_assignations!vehicule_id(
+            *,
+            user:users(
+              id,
+              nom,
+              prenom,
+              role
+            )
+          )
+        `)
+        .eq('id', id)
+        .eq('assignations.actif', true)
+        .single()
+      
+      if (error && error.code !== 'PGRST116') throw error
+      return data
     })
 
     if (!vehicule) {
@@ -46,7 +38,17 @@ export async function GET(
       )
     }
 
-    return NextResponse.json(vehicule)
+    // Mapper les champs pour compatibilité frontend
+    const vehiculeFormatted = {
+      ...vehicule,
+      prochaineVidange: vehicule.prochaine_vidange,
+      prochainEntretien: vehicule.prochain_entretien,
+      prochainControleTechnique: vehicule.prochain_controle_technique,
+      createdAt: vehicule.created_at,
+      updatedAt: vehicule.updated_at
+    }
+
+    return NextResponse.json(vehiculeFormatted)
   } catch (error) {
     console.error('Erreur lors de la récupération du véhicule:', error)
     return NextResponse.json(
@@ -65,75 +67,70 @@ export async function PUT(
     const { id } = await params
     const body = await request.json()
 
-    const vehicule = await executeWithRetry(async (prisma) => {
+    const vehicule = await executeWithRetry(async (supabase) => {
       // Vérifier que le véhicule existe
-      const existingVehicule = await prisma.vehicule.findUnique({
-        where: { id }
-      })
-
-      if (!existingVehicule) {
+      const { data: existingVehicule, error: findError } = await supabase
+        .from('vehicules')
+        .select('*')
+        .eq('id', id)
+        .single()
+      
+      if (findError || !existingVehicule) {
         throw new Error('VEHICLE_NOT_FOUND')
       }
 
       // Si l'immatriculation est modifiée, vérifier qu'elle n'existe pas déjà
       if (body.immatriculation && body.immatriculation !== existingVehicule.immatriculation) {
-        const duplicateVehicule = await prisma.vehicule.findFirst({
-          where: {
-            immatriculation: body.immatriculation.toUpperCase(),
-            id: { not: id }
-          }
-        })
-
+        const { data: duplicateVehicule, error: dupError } = await supabase
+          .from('vehicules')
+          .select('id')
+          .eq('immatriculation', body.immatriculation.toUpperCase())
+          .neq('id', id)
+          .single()
+        
+        if (dupError && dupError.code !== 'PGRST116') throw dupError
         if (duplicateVehicule) {
           throw new Error('DUPLICATE_IMMATRICULATION')
         }
       }
 
-      return await prisma.vehicule.update({
-        where: { id },
-        data: {
-          ...(body.marque && { marque: body.marque }),
-          ...(body.modele && { modele: body.modele }),
-          ...(body.immatriculation && { immatriculation: body.immatriculation.toUpperCase() }),
-          ...(body.couleur !== undefined && { couleur: body.couleur }),
-          ...(body.annee !== undefined && { annee: body.annee ? parseInt(body.annee) : null }),
-          ...(body.actif !== undefined && { actif: body.actif }),
-          ...(body.kilometrage !== undefined && { kilometrage: body.kilometrage ? parseInt(body.kilometrage) : 0 }),
-          ...(body.carburant !== undefined && { carburant: body.carburant }),
-          ...(body.prochaineVidange !== undefined && { prochaineVidange: body.prochaineVidange ? new Date(body.prochaineVidange) : null }),
-          ...(body.prochainEntretien !== undefined && { prochainEntretien: body.prochainEntretien ? new Date(body.prochainEntretien) : null }),
-          ...(body.prochainControleTechnique !== undefined && { prochainControleTechnique: body.prochainControleTechnique ? new Date(body.prochainControleTechnique) : null }),
-          ...(body.notes !== undefined && { notes: body.notes })
-        },
-        include: {
-          users: {
-            select: {
-              id: true,
-              nom: true,
-              prenom: true,
-              telephone: true,
-              role: true,
-              statut: true
-            }
-          },
-          assignations: {
-            where: { actif: true },
-            include: {
-              user: {
-                select: {
-                  id: true,
-                  nom: true,
-                  prenom: true,
-                  role: true
-                }
-              }
-            }
-          }
-        }
-      })
+      // Préparer les données pour la mise à jour
+      const updateData: any = {}
+      if (body.marque) updateData.marque = body.marque
+      if (body.modele) updateData.modele = body.modele
+      if (body.immatriculation) updateData.immatriculation = body.immatriculation.toUpperCase()
+      if (body.couleur !== undefined) updateData.couleur = body.couleur
+      if (body.annee !== undefined) updateData.annee = body.annee ? parseInt(body.annee) : null
+      if (body.actif !== undefined) updateData.actif = body.actif
+      if (body.kilometrage !== undefined) updateData.kilometrage = body.kilometrage ? parseInt(body.kilometrage) : 0
+      if (body.carburant !== undefined) updateData.carburant = body.carburant
+      if (body.prochaineVidange !== undefined) updateData.prochaine_vidange = body.prochaineVidange ? new Date(body.prochaineVidange).toISOString() : null
+      if (body.prochainEntretien !== undefined) updateData.prochain_entretien = body.prochainEntretien ? new Date(body.prochainEntretien).toISOString() : null
+      if (body.prochainControleTechnique !== undefined) updateData.prochain_controle_technique = body.prochainControleTechnique ? new Date(body.prochainControleTechnique).toISOString() : null
+      if (body.notes !== undefined) updateData.notes = body.notes
+
+      const { data: updatedVehicule, error: updateError } = await supabase
+        .from('vehicules')
+        .update(updateData)
+        .eq('id', id)
+        .select('*')
+        .single()
+      
+      if (updateError) throw updateError
+      return updatedVehicule
     })
 
-    return NextResponse.json(vehicule)
+    // Mapper les champs pour compatibilité frontend
+    const vehiculeFormatted = {
+      ...vehicule,
+      prochaineVidange: vehicule.prochaine_vidange,
+      prochainEntretien: vehicule.prochain_entretien,
+      prochainControleTechnique: vehicule.prochain_controle_technique,
+      createdAt: vehicule.created_at,
+      updatedAt: vehicule.updated_at
+    }
+
+    return NextResponse.json(vehiculeFormatted)
   } catch (error) {
     console.error('Erreur lors de la mise à jour du véhicule:', error)
     

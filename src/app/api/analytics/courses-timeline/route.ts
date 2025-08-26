@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server'
-import { executeWithRetry } from '@/lib/db'
+import { executeWithRetry, getSupabaseClient } from '@/lib/supabase'
 import { subDays, startOfDay, endOfDay, format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 
 export async function GET() {
   try {
-    const timelineData = await executeWithRetry(async (prisma) => {
+    const timelineData = await executeWithRetry(async (supabase) => {
       // Obtenir les données des 7 derniers jours
       const today = new Date()
 
@@ -16,21 +16,24 @@ export async function GET() {
         const dayStart = startOfDay(currentDate)
         const dayEnd = endOfDay(currentDate)
 
-        const coursesForDay = await prisma.course.findMany({
-          where: {
-            dateHeure: {
-              gte: dayStart,
-              lte: dayEnd
-            }
-          }
-        })
+        // Récupérer les courses pour ce jour avec Supabase
+        const { data: coursesForDay, error } = await supabase
+          .from('courses')
+          .select('*')
+          .gte('date_heure', dayStart.toISOString())
+          .lte('date_heure', dayEnd.toISOString())
 
-        const totalCourses = coursesForDay.length
-        const coursesTerminees = coursesForDay.filter(c => c.statut === 'TERMINEE').length
-        const coursesAnnulees = coursesForDay.filter(c => c.statut === 'ANNULEE').length
+        if (error) {
+          console.error('Erreur Supabase pour', currentDate, ':', error)
+          throw error
+        }
+
+        const totalCourses = coursesForDay?.length || 0
+        const coursesTerminees = coursesForDay?.filter(c => c.statut === 'TERMINEE').length || 0
+        const coursesAnnulees = coursesForDay?.filter(c => c.statut === 'ANNULEE').length || 0
         const revenu = coursesForDay
-          .filter(c => c.statut === 'TERMINEE' && c.prix)
-          .reduce((sum, c) => sum + (c.prix || 0), 0)
+          ?.filter(c => c.statut === 'TERMINEE' && c.prix)
+          .reduce((sum, c) => sum + (parseFloat(c.prix?.toString() || '0') || 0), 0) || 0
 
         data.push({
           date: format(currentDate, 'dd/MM', { locale: fr }),

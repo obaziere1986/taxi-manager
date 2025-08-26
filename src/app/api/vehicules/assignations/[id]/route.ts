@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { executeWithRetry } from '@/lib/supabase'
 
 export async function DELETE(
   request: NextRequest,
@@ -28,20 +28,25 @@ export async function DELETE(
     console.log(`🔄 [${timestamp}] DÉSASSIGNATION - Recherche assignation...`)
     
     // Vérifier que l'assignation existe
-    const assignation = await prisma.vehiculeAssignation.findUnique({
-        where: { id: assignationId },
-        include: {
-          vehicule: true,
-          user: {
-            select: {
-              id: true,
-              nom: true,
-              prenom: true,
-              role: true
-            }
-          }
-        }
-      })
+    const assignation = await executeWithRetry(async (supabase) => {
+      const { data, error } = await supabase
+        .from('vehicule_assignations')
+        .select(`
+          *,
+          vehicule:vehicules(*),
+          user:users(
+            id,
+            nom,
+            prenom,
+            role
+          )
+        `)
+        .eq('id', assignationId)
+        .single()
+      
+      if (error && error.code !== 'PGRST116') throw error
+      return data
+    })
 
     if (!assignation) {
       console.log(`❌ [${timestamp}] DÉSASSIGNATION - Assignation non trouvée:`, assignationId)
@@ -57,30 +62,40 @@ export async function DELETE(
     console.log(`✅ [${timestamp}] DÉSASSIGNATION - Assignation trouvée:`)
     console.log(`   📋 Véhicule: ${vehiculeInfo}`)
     console.log(`   👤 Assigné à: ${personneInfo}`)
-    console.log(`   📅 Date début: ${assignation.dateDebut}`)
+    console.log(`   📅 Date début: ${assignation.date_debut}`)
     console.log(`   ✅ Statut actuel: ${assignation.actif ? 'ACTIF' : 'INACTIF'}`)
 
     const dateFin = new Date()
 
     // Marquer l'assignation comme inactive
     console.log(`🔄 [${timestamp}] DÉSASSIGNATION - Marquage comme inactive...`)
-    const updatedAssignation = await prisma.vehiculeAssignation.update({
-      where: { id: assignationId },
-      data: {
-        actif: false,
-        dateFin: dateFin
-      }
+    const updatedAssignation = await executeWithRetry(async (supabase) => {
+      const { data, error } = await supabase
+        .from('vehicule_assignations')
+        .update({
+          actif: false,
+          date_fin: dateFin.toISOString()
+        })
+        .eq('id', assignationId)
+        .select()
+        .single()
+      
+      if (error) throw error
+      return data
     })
 
     // Nettoyer la référence véhicule de l'utilisateur
-    if (assignation.userId) {
+    if (assignation.user_id) {
       console.log(`🔧 [${timestamp}] DÉSASSIGNATION - Nettoyage référence véhicule de l'utilisateur ${assignation.user.prenom} ${assignation.user.nom}`)
-      await prisma.user.update({
-        where: { id: assignation.userId },
-        data: {
-          vehicule: null,
-          vehiculeId: null
-        }
+      await executeWithRetry(async (supabase) => {
+        const { error } = await supabase
+          .from('users')
+          .update({
+            vehicule_id: null
+          })
+          .eq('id', assignation.user_id)
+        
+        if (error) throw error
       })
       console.log(`✅ [${timestamp}] DÉSASSIGNATION - Utilisateur ${assignation.user.prenom} ${assignation.user.nom} libéré du véhicule ${vehiculeInfo}`)
     }
@@ -88,12 +103,21 @@ export async function DELETE(
     console.log(`🎉 [${timestamp}] DÉSASSIGNATION - Terminée avec succès pour:`)
     console.log(`   📋 Véhicule: ${vehiculeInfo}`)
     console.log(`   👤 Anciennement assigné à: ${personneInfo}`)
-    console.log(`   📅 Période: ${assignation.dateDebut} → ${dateFin.toISOString()}`)
+    console.log(`   📅 Période: ${assignation.date_debut} → ${dateFin.toISOString()}`)
+    
+    // Ajouter les champs manquants pour compatibilité
+    const responseAssignation = {
+      ...updatedAssignation,
+      dateDebut: updatedAssignation.date_debut,
+      dateFin: updatedAssignation.date_fin,
+      userId: updatedAssignation.user_id,
+      vehiculeId: updatedAssignation.vehicule_id
+    }
 
     return NextResponse.json(
       { 
         message: 'Véhicule désassigné avec succès',
-        assignation: updatedAssignation
+        assignation: responseAssignation
       }, 
       { status: 200 }
     )

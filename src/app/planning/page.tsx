@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { PhoneInput } from '@/components/ui/phone-input'
 import { ClientCombobox } from '@/components/ui/combobox'
 import { Textarea } from '@/components/ui/textarea'
 import {
@@ -23,17 +24,20 @@ import { format, addDays, subDays, startOfDay, endOfDay, addHours, startOfHour }
 import { fr } from 'date-fns/locale'
 import { getCourseStatusBadge, formatStatut, getDefaultBadge } from '@/lib/badge-utils'
 import { CourseModal } from '@/components/courses/CourseModal'
+import { useSettings } from '@/hooks/useSettings'
 import {
   DndContext,
   DragOverlay,
   closestCenter,
   KeyboardSensor,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   useSensor,
   useSensors,
   DragStartEvent,
   DragEndEvent,
   DragOverEvent,
+  getClientRect,
 } from '@dnd-kit/core'
 import {
   sortableKeyboardCoordinates,
@@ -224,6 +228,7 @@ function ChauffeurVerticalPlanning({
 
 export default function PlanningPage() {
   const { data: session } = useSession()
+  const { settings } = useSettings()
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [courses, setCourses] = useState<Course[]>([])
   const [users, setUsers] = useState<User[]>([])
@@ -271,9 +276,15 @@ export default function PlanningPage() {
   })
 
   const sensors = useSensors(
-    useSensor(PointerSensor, {
+    useSensor(MouseSensor, {
       activationConstraint: {
-        distance: 8, // Minimum de 8px de mouvement pour déclencher le drag
+        distance: 10,
+      },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        delay: 250,
+        tolerance: 5,
       },
     }),
     useSensor(KeyboardSensor, {
@@ -457,6 +468,7 @@ export default function PlanningPage() {
   }
 
   const handleCourseAssign = async (courseId: string, userId: string | null) => {
+    console.log('🚀 ASSIGN COURSE:', { courseId, userId })
     try {
       const response = await fetch(`/api/courses/${courseId}/assign`, {
         method: 'PUT',
@@ -468,14 +480,19 @@ export default function PlanningPage() {
         }),
       })
 
+      console.log('📡 API Response status:', response.status)
+
       if (response.ok) {
+        const result = await response.json()
+        console.log('✅ Assignment successful:', result)
         await fetchData() // Recharger les données
+        console.log('🔄 Data reloaded')
       } else {
         const result = await response.json()
-        console.error('Assignment failed:', result)
+        console.error('❌ Assignment failed:', result)
       }
     } catch (error) {
-      console.error('Erreur lors de l\'assignation:', error)
+      console.error('💥 Error during assignment:', error)
     }
   }
 
@@ -488,7 +505,7 @@ export default function PlanningPage() {
 
   const getUnassignedCourses = () => {
     return courses.filter(course => 
-      course.statut === 'EN_ATTENTE'
+      course.statut === 'EN_ATTENTE' && !course.user
     )
   }
 
@@ -500,12 +517,19 @@ export default function PlanningPage() {
     }
   }
 
-  // Générer les créneaux horaires de 7h à 22h
+  // Générer les créneaux horaires selon les préférences (par défaut 7h à 22h)
   const generateTimeSlots = () => {
     const slots = []
-    for (let hour = 7; hour <= 22; hour++) {
+    
+    // Récupérer les horaires des préférences ou utiliser les valeurs par défaut (24h/24)
+    const openingHour = settings?.opening_hours ? parseInt(settings.opening_hours.substring(0, 2)) : 0
+    const closingHour = settings?.closing_hours ? parseInt(settings.closing_hours.substring(0, 2)) : 23
+    
+    // Générer les créneaux de l'ouverture à la fermeture
+    for (let hour = openingHour; hour <= closingHour; hour++) {
       slots.push(hour)
     }
+    
     return slots
   }
 
@@ -693,6 +717,7 @@ export default function PlanningPage() {
 
   const handleDragStart = (event: DragStartEvent) => {
     const activeId = event.active.id as string
+    console.log('🚀 DRAG START:', activeId)
     setActiveId(activeId)
     setIsDragging(true)
     
@@ -739,7 +764,12 @@ export default function PlanningPage() {
     setDragOverSlot(null)
     setIsDragging(false)
 
-    if (!over) return
+    console.log('🔥 DRAG END:', { activeId: active.id, overId: over?.id })
+
+    if (!over) {
+      console.log('❌ No drop target')
+      return
+    }
 
     const activeId = active.id as string
     let courseId = activeId
@@ -749,37 +779,57 @@ export default function PlanningPage() {
       courseId = activeId.replace('planning-', '')
     }
     
+    console.log('🎯 Course ID extracted:', courseId)
+    
     const course = courses.find(c => c.id === courseId)
-    if (!course) return
+    if (!course) {
+      console.log('❌ Course not found:', courseId)
+      return
+    }
 
     const dropId = over.id as string
+    console.log('📍 Drop ID:', dropId)
     
     // Si on drop vers "unassigned", désassigner la course
     if (dropId === 'unassigned') {
+      console.log('➡️ Unassigning course')
       handleCourseAssign(courseId, null)
       return
     }
     
-    const [chauffeurId, hourStr] = dropId.split('-')
+    // L'ID est de la forme: "uuid-uuid-uuid-uuid-uuid-HEURE"
+    const lastDashIndex = dropId.lastIndexOf('-')
+    const chauffeurId = dropId.substring(0, lastDashIndex)
+    const hourStr = dropId.substring(lastDashIndex + 1)
     const hour = parseInt(hourStr)
 
+    console.log('👤 Chauffeur ID:', chauffeurId, 'Hour:', hour)
+
     const chauffeur = users.find(c => c.id === chauffeurId)
-    if (!chauffeur) return
+    if (!chauffeur) {
+      console.log('❌ Chauffeur not found:', chauffeurId)
+      return
+    }
+
+    console.log('✅ Found chauffeur:', chauffeur.nom, chauffeur.prenom)
 
     // Si la course n'est pas assignée, assigner directement
     if (!course.user) {
+      console.log('➡️ Assigning unassigned course')
       handleCourseAssign(courseId, chauffeurId)
       return
     }
 
     // Si la course est déjà assignée à un autre chauffeur, demander confirmation
     if (course.user.id !== chauffeurId) {
+      console.log('⚠️ Reassigning from', course.user.nom, 'to', chauffeur.nom)
       if (confirm(`Êtes-vous sûr de vouloir réassigner cette course à ${chauffeur.nom.toUpperCase()}, ${chauffeur.prenom} ?`)) {
         handleCourseAssign(courseId, chauffeurId)
       }
       return
     }
 
+    console.log('✅ Same chauffeur, no action needed')
     // Si on drop sur le même chauffeur, ne rien faire
   }
 
@@ -867,10 +917,8 @@ export default function PlanningPage() {
 
   // Composant pour les courses draggables (colonne en attente)
   const DraggableCourse = ({ course }: { course: Course }) => {
-    const [isClicking, setIsClicking] = useState(false)
     const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
       id: course.id,
-      disabled: isClicking, // Désactiver le drag pendant le clic
     })
 
     const style = {
@@ -879,26 +927,31 @@ export default function PlanningPage() {
     }
 
     return (
-      <Card 
-        ref={setNodeRef} 
-        style={style} 
-        {...(isClicking ? {} : listeners)}
-        {...(isClicking ? {} : attributes)}
-        className="p-3 cursor-pointer hover:shadow-md transition-shadow bg-gray-100 border border-gray-300"
-        onClick={(e) => {
-          e.preventDefault()
-          e.stopPropagation()
-          setIsClicking(true)
-          // Si la course n'est pas assignée, ouvrir la modal d'assignation
-          if (!course.user || course.statut === 'EN_ATTENTE') {
-            setAssignmentDialog({ isOpen: true, course })
-          } else {
-            handleViewCourse(course)
-          }
-          // Reset après un délai
-          setTimeout(() => setIsClicking(false), 100)
-        }}
-      >
+      <div ref={setNodeRef} style={style}>
+        <Card 
+          {...listeners}
+          {...attributes}
+          className="p-3 cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow bg-gray-100 border border-gray-300"
+          onClickCapture={(e) => {
+            // Empêcher le clic pendant le drag
+            if (isDragging) {
+              e.preventDefault()
+              e.stopPropagation()
+            }
+          }}
+          onClick={(e) => {
+            if (!isDragging) {
+              e.preventDefault()
+              e.stopPropagation()
+              // Si la course n'est pas assignée, ouvrir la modal d'assignation
+              if (!course.user || course.statut === 'EN_ATTENTE') {
+                setAssignmentDialog({ isOpen: true, course })
+              } else {
+                handleViewCourse(course)
+              }
+            }
+          }}
+        >
         <div className="space-y-2">
           <div className="flex items-center text-xs font-medium">
             <Clock className="h-3 w-3 mr-1" />
@@ -923,16 +976,15 @@ export default function PlanningPage() {
             {formatStatut(getRealCourseStatus(course))}
           </Badge>
         </div>
-      </Card>
+        </Card>
+      </div>
     )
   }
 
   // Composant pour les courses dans le planning (draggables également)
   const PlanningCourse = ({ course }: { course: Course }) => {
-    const [isClicking, setIsClicking] = useState(false)
     const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
       id: `planning-${course.id}`, // Préfixe pour différencier
-      disabled: isClicking, // Désactiver le drag si on clique
     })
 
     const style = {
@@ -940,24 +992,28 @@ export default function PlanningPage() {
       opacity: isDragging ? 0.5 : 1,
     }
 
-    const handleClick = (e: React.MouseEvent) => {
-      e.preventDefault()
-      e.stopPropagation()
-      setIsClicking(true)
-      // Toujours ouvrir les détails pour les courses dans le planning
-      handleViewCourse(course)
-      setTimeout(() => setIsClicking(false), 100)
-    }
-
     return (
-      <div 
-        ref={setNodeRef}
-        style={style}
-        {...(isClicking ? {} : listeners)} 
-        {...(isClicking ? {} : attributes)}
-        className="bg-gray-100 border border-gray-300 rounded p-2 text-xs cursor-pointer hover:opacity-80 transition-colors w-full overflow-hidden"
-        onClick={handleClick}
-      >
+      <div ref={setNodeRef} style={style}>
+        <div 
+          {...listeners} 
+          {...attributes}
+          className="bg-gray-100 border border-gray-300 rounded p-2 text-xs cursor-grab active:cursor-grabbing hover:opacity-80 transition-colors w-full overflow-hidden"
+          onClickCapture={(e) => {
+            // Empêcher le clic pendant le drag
+            if (isDragging) {
+              e.preventDefault()
+              e.stopPropagation()
+            }
+          }}
+          onClick={(e) => {
+            if (!isDragging) {
+              e.preventDefault()
+              e.stopPropagation()
+              // Toujours ouvrir les détails pour les courses dans le planning
+              handleViewCourse(course)
+            }
+          }}
+        >
         <div className="flex items-center justify-between mb-1">
           <div className="font-medium text-blue-900 text-xs">
             {format(new Date(course.dateHeure), 'HH:mm', { locale: fr })}
@@ -979,6 +1035,7 @@ export default function PlanningPage() {
         </div>
         <div className="text-blue-700 truncate text-xs">
           {course.client.nom.toUpperCase()}, {course.client.prenom}
+        </div>
         </div>
       </div>
     )
@@ -1214,16 +1271,16 @@ export default function PlanningPage() {
               <CardContent className="flex-1 flex flex-col min-h-0 p-0">
                 <div className="flex-1 overflow-auto">
                   <table className="w-full">
-                    <thead className="sticky top-0 bg-background border-b">
+                    <thead className="sticky top-0 bg-background border-b z-30">
                       <tr>
                         <th 
-                          className="sticky left-0 z-20 w-32 p-3 text-left text-xs font-medium text-muted-foreground border-r bg-background"
+                          className="sticky left-0 z-40 w-32 p-3 text-left text-xs font-medium text-muted-foreground border-r bg-background"
                           style={{ boxShadow: '2px 0 4px -1px rgba(0, 0, 0, 0.1)' }}
                         >
                           Chauffeur
                         </th>
                         {generateTimeSlots().map((hour) => (
-                          <th key={hour} className={`w-36 min-w-[140px] max-w-[140px] p-2 text-center text-xs font-medium border-r ${
+                          <th key={hour} className={`w-36 min-w-[140px] max-w-[140px] p-2 text-center text-xs font-medium border-r z-30 bg-background ${
                             isToday() && hour === getCurrentHour() 
                               ? 'bg-blue-100 text-blue-600 font-bold' 
                               : 'text-muted-foreground'
@@ -1427,12 +1484,11 @@ export default function PlanningPage() {
                         />
                       </div>
                       <div>
-                        <Label htmlFor="clientTelephone">Téléphone *</Label>
-                        <Input
+                        <PhoneInput
                           id="clientTelephone"
-                          type="tel"
+                          label="Téléphone *"
                           value={newClientData.telephone}
-                          onChange={(e) => setNewClientData({ ...newClientData, telephone: e.target.value })}
+                          onChange={(value) => setNewClientData({ ...newClientData, telephone: value })}
                           required
                         />
                       </div>
@@ -2019,22 +2075,32 @@ export default function PlanningPage() {
         {/* DragOverlay pour l'aperçu pendant le drag */}
         <DragOverlay
           style={{
-            transformOrigin: '50% 50%',
+            transformOrigin: '0 0',
+            zIndex: 9999,
           }}
           modifiers={[
-            (args) => ({
-              ...args,
-              transform: {
-                ...args.transform,
-                // Center the drag preview by offsetting it
-                x: args.transform.x - 75, // Half width of typical card
-                y: args.transform.y - 40, // Half height of typical card
-              },
-            })
+            (args) => {
+              // Décaler la card pour que le curseur soit au centre
+              return {
+                ...args,
+                transform: {
+                  ...args.transform,
+                  x: args.transform.x - 75, // Moitié de la largeur approximative de la card
+                  y: args.transform.y - 30, // Moitié de la hauteur approximative de la card
+                },
+              }
+            }
           ]}
         >
           {activeId && activeCourse ? (
-            <DraggableCourse course={activeCourse} />
+            <div style={{ 
+              opacity: 0.95, 
+              transform: 'rotate(5deg)', 
+              filter: 'drop-shadow(0 20px 25px rgba(0, 0, 0, 0.3))',
+              pointerEvents: 'none'
+            }}>
+              <DraggableCourse course={activeCourse} />
+            </div>
           ) : null}
         </DragOverlay>
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { executeWithRetry } from '@/lib/db'
+import { executeWithRetry } from '@/lib/supabase'
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,25 +13,23 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    const whereClause = {
-      actif: true,
-      userId: userId
-    }
-
-    const assignations = await executeWithRetry(async (prisma) => {
-      return await prisma.vehiculeAssignation.findMany({
-        where: whereClause,
-        include: {
-          vehicule: {
-            select: {
-              id: true,
-              marque: true,
-              modele: true,
-              immatriculation: true
-            }
-          }
-        }
-      })
+    const assignations = await executeWithRetry(async (supabase) => {
+      const { data, error } = await supabase
+        .from('vehicule_assignations')
+        .select(`
+          *,
+          vehicule:vehicules(
+            id,
+            marque,
+            modele,
+            immatriculation
+          )
+        `)
+        .eq('actif', true)
+        .eq('user_id', userId)
+      
+      if (error) throw error
+      return data || []
     })
 
     return NextResponse.json(assignations)

@@ -52,19 +52,21 @@ interface User {
 
 function CourseCard({
   course,
+  onView,
   onEdit,
   onDelete,
   onUpdateStatut,
   session,
 }: {
   course: Course;
+  onView: (course: Course) => void;
   onEdit: (course: Course) => void;
   onDelete: (id: string) => void;
   onUpdateStatut: (id: string, statut: string) => void;
   session: { user: { role: string; id: string } } | null;
 }) {
   return (
-    <div className="border rounded-lg p-4 space-y-3">
+    <div className="border rounded-lg p-4 space-y-3 cursor-pointer hover:bg-muted/50" onClick={() => onView(course)}>
       <div className="flex justify-between items-start">
         <div className="space-y-2 flex-1">
           {/* Trajet */}
@@ -82,12 +84,18 @@ function CourseCard({
           <div className="flex items-center gap-6 text-sm">
             <div className="flex items-center">
               <User className="mr-2 h-3 w-3 text-grey-200" />
-              {course.client.nom.toUpperCase()} {course.client.prenom}
+              {course.client ? 
+                `${course.client.nom.toUpperCase()} ${course.client.prenom}` :
+                'Client inconnu'
+              }
             </div>
             {course.user ? (
               <div className="flex items-center">
                 <Car className="mr-2 h-3 w-3 text-primary-200" />
-                {course.user.nom.toUpperCase()} {course.user.prenom}
+                {course.user.nom ? 
+                  `${course.user.nom.toUpperCase()} ${course.user.prenom}` :
+                  'Chauffeur inconnu'
+                }
               </div>
             ) : (
               <span className="text-muted-foreground text-sm">Non assigné</span>
@@ -125,7 +133,10 @@ function CourseCard({
             {(session?.user?.role !== 'Chauffeur' || 
              (course.user?.id === session.user.id && course.statut !== 'TERMINEE')) && (
               <ProtectedComponent permissions={["courses.update"]}>
-                <Button variant="outline" size="sm" onClick={() => onEdit(course)}>
+                <Button variant="outline" size="sm" onClick={(e) => {
+                  e.stopPropagation();
+                  onEdit(course);
+                }}>
                   <Edit className="h-3 w-3" />
                 </Button>
               </ProtectedComponent>
@@ -134,7 +145,10 @@ function CourseCard({
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => onDelete(course.id)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete(course.id);
+                }}
               >
                 <Trash2 className="h-3 w-3" />
               </Button>
@@ -149,6 +163,7 @@ function CourseCard({
 function CategorySection({
   title,
   categories,
+  onView,
   onEdit,
   onDelete,
   onUpdateStatut,
@@ -156,6 +171,7 @@ function CategorySection({
 }: {
   title: string;
   categories: CourseCategory[];
+  onView: (course: Course) => void;
   onEdit: (course: Course) => void;
   onDelete: (id: string) => void;
   onUpdateStatut: (id: string, statut: string) => void;
@@ -221,6 +237,7 @@ function CategorySection({
                 <CourseCard
                   key={course.id}
                   course={course}
+                  onView={onView}
                   onEdit={onEdit}
                   onDelete={onDelete}
                   onUpdateStatut={onUpdateStatut}
@@ -283,8 +300,17 @@ export default function CoursesPage() {
   };
 
 
+  const handleView = (course: Course) => {
+    setCourseModal({ isOpen: true, course, mode: 'view' });
+  };
+
   const handleEdit = (course: Course) => {
     console.log('handleEdit appelé', { course, userRole: session?.user?.role, userId: session?.user?.id });
+    
+    // Courses terminées ne peuvent pas être modifiées
+    if (course.statut === 'TERMINEE') {
+      return;
+    }
     
     // Pour les chauffeurs, vérifier les permissions
     if (session?.user?.role === 'Chauffeur') {
@@ -438,6 +464,7 @@ export default function CoursesPage() {
             <CategorySection
               title="Courses à venir"
               categories={aVenir}
+              onView={handleView}
               onEdit={handleEdit}
               onDelete={handleDeleteCourse}
               onUpdateStatut={handleStatusUpdate}
@@ -448,6 +475,7 @@ export default function CoursesPage() {
             <CategorySection
               title="Courses passées"
               categories={passees}
+              onView={handleView}
               onEdit={handleEdit}
               onDelete={handleDeleteCourse}
               onUpdateStatut={handleStatusUpdate}

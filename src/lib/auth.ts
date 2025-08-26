@@ -1,11 +1,14 @@
 import { NextAuthOptions } from "next-auth"
 import CredentialsProvider from "next-auth/providers/credentials"
-import { PrismaAdapter } from "@auth/prisma-adapter"
+import { SupabaseAdapter } from "@auth/supabase-adapter"
 import bcrypt from "bcryptjs"
-import { prisma } from "@/lib/prisma"
+import { getSupabaseClient } from "@/lib/supabase"
 
 export const authOptions: NextAuthOptions = {
-  adapter: PrismaAdapter(prisma) as any,
+  adapter: SupabaseAdapter({
+    url: process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    secret: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+  }),
   providers: [
     CredentialsProvider({
       name: "credentials",
@@ -18,52 +21,56 @@ export const authOptions: NextAuthOptions = {
           return null
         }
 
-        // Rechercher l'utilisateur par login ou email
-        const user = await prisma.user.findFirst({
-          where: {
-            OR: [
-              { login: credentials.login },
-              { email: credentials.login }
-            ],
-            actif: true
-          }
-        })
+        const supabase = getSupabaseClient()
 
-        if (!user || !user.passwordHash) {
+        // Rechercher l'utilisateur par login ou email
+        const { data: users, error } = await supabase
+          .from('users')
+          .select('*')
+          .or(`login.eq.${credentials.login},email.eq.${credentials.login}`)
+          .eq('actif', true)
+
+        if (error || !users || users.length === 0) {
+          return null
+        }
+
+        const user = users[0]
+
+        if (!user || !user.password_hash) {
           return null
         }
 
         // Vérifier si le compte est verrouillé
-        if (user.lockedUntil && user.lockedUntil > new Date()) {
+        if (user.locked_until && new Date(user.locked_until) > new Date()) {
           return null
         }
 
         // Vérifier le mot de passe
-        const isValidPassword = await bcrypt.compare(credentials.password, user.passwordHash)
+        const isValidPassword = await bcrypt.compare(credentials.password, user.password_hash)
         
         if (!isValidPassword) {
           // Incrémenter les échecs de connexion
-          await prisma.user.update({
-            where: { id: user.id },
-            data: {
-              failedLogins: user.failedLogins + 1,
-              lockedUntil: user.failedLogins >= 4 ? 
-                new Date(Date.now() + 15 * 60 * 1000) : // Verrouiller 15 minutes après 5 échecs
+          await supabase
+            .from('users')
+            .update({
+              failed_logins: user.failed_logins + 1,
+              locked_until: user.failed_logins >= 4 ? 
+                new Date(Date.now() + 15 * 60 * 1000).toISOString() : 
                 null
-            }
-          })
+            })
+            .eq('id', user.id)
           return null
         }
 
         // Réinitialiser les échecs et mettre à jour la dernière connexion
-        await prisma.user.update({
-          where: { id: user.id },
-          data: {
-            failedLogins: 0,
-            lockedUntil: null,
-            lastLoginAt: new Date()
-          }
-        })
+        await supabase
+          .from('users')
+          .update({
+            failed_logins: 0,
+            locked_until: null,
+            last_login_at: new Date().toISOString()
+          })
+          .eq('id', user.id)
 
         return {
           id: user.id,
@@ -71,7 +78,7 @@ export const authOptions: NextAuthOptions = {
           name: `${user.prenom} ${user.nom}`,
           role: user.role,
           statut: user.statut,
-          avatarUrl: user.avatarUrl
+          avatarUrl: user.avatar_url
         }
       }
     })
@@ -90,19 +97,14 @@ export const authOptions: NextAuthOptions = {
     },
     async session({ session, token }) {
       if (session?.user && token.sub) {
-        // Récupérer les données à jour de l'utilisateur, y compris l'avatarUrl
-        const user = await prisma.user.findUnique({
-          where: { id: token.sub },
-          select: {
-            id: true,
-            nom: true,
-            prenom: true,
-            email: true,
-            role: true,
-            statut: true,
-            avatarUrl: true
-          }
-        })
+        const supabase = getSupabaseClient()
+        
+        // Récupérer les données à jour de l'utilisateur
+        const { data: user } = await supabase
+          .from('users')
+          .select('id, nom, prenom, email, role, statut, avatar_url')
+          .eq('id', token.sub)
+          .single()
         
         if (user) {
           session.user.id = user.id
@@ -110,7 +112,7 @@ export const authOptions: NextAuthOptions = {
           session.user.email = user.email
           session.user.role = user.role
           session.user.statut = user.statut
-          session.user.avatarUrl = user.avatarUrl
+          session.user.avatarUrl = user.avatar_url
         }
       }
       return session

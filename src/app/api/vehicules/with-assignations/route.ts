@@ -1,41 +1,46 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { executeWithRetry } from '@/lib/db'
+import { executeWithRetry } from '@/lib/supabase'
 
 export async function GET() {
   try {
     console.log('🔄 API Véhicules avec assignations - début')
     
-    // Récupérer tous les véhicules avec leurs assignations actives
-    const vehicules = await executeWithRetry(async (prisma) => {
-      return await prisma.vehicule.findMany({
-        include: {
-          assignations: {
-            where: {
-              actif: true
-            },
-            include: {
-              user: {
-                select: {
-                  id: true,
-                  nom: true,
-                  prenom: true,
-                  role: true
-                }
-              }
-            }
-          }
-        },
-        orderBy: [
-          { actif: 'desc' },
-          { marque: 'asc' },
-          { modele: 'asc' }
-        ]
-      })
+    // Récupérer tous les véhicules d'abord
+    const vehicules = await executeWithRetry(async (supabase) => {
+      const { data, error } = await supabase
+        .from('vehicules')
+        .select('*')
+        .order('actif', { ascending: false })
+        .order('marque', { ascending: true })
+        .order('modele', { ascending: true })
+      
+      if (error) throw error
+      return data || []
+    })
+
+    // Récupérer les assignations actives séparément
+    const assignationsActives = await executeWithRetry(async (supabase) => {
+      const { data, error } = await supabase
+        .from('vehicule_assignations')
+        .select(`
+          *,
+          user:users(
+            id,
+            nom,
+            prenom,
+            role
+          )
+        `)
+        .eq('actif', true)
+      
+      if (error) throw error
+      return data || []
     })
 
     // Transformer pour organiser par catégories
     const vehiculesWithStatus = vehicules.map(vehicule => {
-      const assignationActive = vehicule.assignations[0] || null
+      // Trouver l'assignation active pour ce véhicule
+      const assignationActive = assignationsActives.find(a => a.vehicule_id === vehicule.id) || null
       
       return {
         id: vehicule.id,
@@ -48,7 +53,7 @@ export async function GET() {
         isAssigned: !!assignationActive,
         assignation: assignationActive ? {
           id: assignationActive.id,
-          dateDebut: assignationActive.dateDebut.toISOString(),
+          dateDebut: assignationActive.date_debut,
           assignedTo: `${assignationActive.user.nom.toUpperCase()}, ${assignationActive.user.prenom}`,
           assignedToRole: assignationActive.user.role,
           assignedToId: assignationActive.user.id

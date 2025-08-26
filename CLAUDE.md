@@ -15,28 +15,25 @@ pnpm dev:restart  # Redémarrage forcé (kill port 3000)
 ```
 
 ### Base de Données
-```bash
-pnpm exec prisma db push      # Appliquer le schéma
-pnpm exec prisma generate     # Générer le client Prisma
-pnpm exec prisma studio       # Interface graphique (http://localhost:5555)
-pnpm run db:seed              # Peupler avec des données de test
-pnpm run db:reset             # Reset rapide + seeding
-pnpm run db:reset-full        # Reset complet + seeding véhicules
-pnpm run db:check             # Vérifier la stabilité de la DB
-```
+**Migration vers Supabase :**
+- **PostgreSQL** hébergé sur Supabase (projet: pligynlgfmnequzijtqk)
+- **API sécurisée** avec Row Level Security (RLS)
+- **Client Supabase** : `/src/lib/supabase.ts`
+- **Connection robuste** : `/src/lib/db.ts` migré vers Supabase
+- **Plus de Prisma** : Toutes les requêtes via client Supabase
 
-**🔧 Solution aux problèmes de stabilité SQLite :**
-- **Chemin fixe** : `DATABASE_URL="file:prisma/dev.db"`
-- **Connexion robuste** : Client Prisma avec retry automatique
-- **Vérification automatique** : Fonction `ensureDatabaseConnection()`
-- **Scripts de maintenance** : Reset complet et vérification de stabilité
+**🔧 Configuration Supabase :**
+- **URL projet** : `https://pligynlgfmnequzijtqk.supabase.co`
+- **Données réalistes** : 295 courses réparties sur 50 clients (~6 par client)
+- **Période temporelle** : 6 mois (-3 mois à +3 mois)
+- **Statuts cohérents** : Courses futures = EN_ATTENTE/ASSIGNEE/ANNULEE, Passées = TERMINEE/ANNULEE
 
 ## 🏗️ Architecture de l'Application
 
 ### Vue d'Ensemble
 **Système de gestion de taxi en français** construit avec :
 - **Next.js 15** (App Router) + TypeScript
-- **SQLite** + Prisma ORM  
+- **Supabase** (PostgreSQL) + client Supabase
 - **Tailwind CSS v4** + shadcn/ui
 - **Recharts** pour les graphiques
 - **@dnd-kit** pour le drag-and-drop
@@ -162,11 +159,11 @@ src/components/
 ```
 
 ### Base de Données
-- **Connection robuste** : `/src/lib/db.ts` avec retry automatique
-- **Client Prisma** : Pool de connexions avec reconnexion
-- **SQLite** : `prisma/dev.db` (development, chemin fixe résolu)
+- **Connection Supabase** : `/src/lib/supabase.ts` avec client configuré
+- **PostgreSQL** : Base hébergée avec Row Level Security
+- **Migration complète** : Toutes les APIs utilisent Supabase
 - **Seeding** avec noms d'acteurs français célèbres (toutes générations)
-- **Données complètes** : 10 utilisateurs, 10 véhicules, 50 clients, ~550 courses
+- **Données réalistes** : 10 utilisateurs, 10 véhicules, 50 clients, 295 courses (6 mois)
 
 ## 🎨 Interface Utilisateur
 

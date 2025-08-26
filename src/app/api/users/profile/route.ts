@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
+import { executeWithRetry } from '@/lib/supabase'
 
 // GET - Récupérer le profil de l'utilisateur connecté
 export async function GET() {
@@ -12,22 +12,15 @@ export async function GET() {
       return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: {
-        id: true,
-        nom: true,
-        prenom: true,
-        email: true,
-        telephone: true,
-        role: true,
-        notificationsEmail: true,
-        notificationsSMS: true,
-        notificationsDesktop: true,
-        avatarUrl: true,
-        lastLoginAt: true,
-        createdAt: true
-      }
+    const user = await executeWithRetry(async (supabase) => {
+      const { data, error } = await supabase
+        .from('users')
+        .select('id, nom, prenom, email, telephone, role, notifications_email, notifications_sms, notifications_desktop, avatar_url, last_login_at, created_at')
+        .eq('id', session.user.id)
+        .single()
+      
+      if (error) throw error
+      return data
     })
 
     if (!user) {
@@ -60,11 +53,16 @@ export async function PUT(request: NextRequest) {
 
     // Vérifier si l'email est déjà utilisé par un autre utilisateur
     if (email !== session.user.email) {
-      const existingUser = await prisma.user.findFirst({
-        where: {
-          email: email,
-          id: { not: session.user.id }
-        }
+      const existingUser = await executeWithRetry(async (supabase) => {
+        const { data, error } = await supabase
+          .from('users')
+          .select('id')
+          .eq('email', email)
+          .neq('id', session.user.id)
+          .single()
+        
+        if (error && error.code !== 'PGRST116') throw error
+        return data
       })
 
       if (existingUser) {
@@ -73,31 +71,24 @@ export async function PUT(request: NextRequest) {
     }
 
     // Mettre à jour l'utilisateur
-    const updatedUser = await prisma.user.update({
-      where: { id: session.user.id },
-      data: {
-        nom: nom.trim(),
-        prenom: prenom.trim(),
-        email: email.trim().toLowerCase(),
-        telephone: telephone?.trim() || null,
-        notificationsEmail: Boolean(notificationsEmail),
-        notificationsSMS: Boolean(notificationsSMS),
-        notificationsDesktop: Boolean(notificationsDesktop)
-      },
-      select: {
-        id: true,
-        nom: true,
-        prenom: true,
-        email: true,
-        telephone: true,
-        role: true,
-        notificationsEmail: true,
-        notificationsSMS: true,
-        notificationsDesktop: true,
-        avatarUrl: true,
-        lastLoginAt: true,
-        createdAt: true
-      }
+    const updatedUser = await executeWithRetry(async (supabase) => {
+      const { data, error } = await supabase
+        .from('users')
+        .update({
+          nom: nom.trim(),
+          prenom: prenom.trim(),
+          email: email.trim().toLowerCase(),
+          telephone: telephone?.trim() || null,
+          notifications_email: Boolean(notificationsEmail),
+          notifications_sms: Boolean(notificationsSMS),
+          notifications_desktop: Boolean(notificationsDesktop)
+        })
+        .eq('id', session.user.id)
+        .select('id, nom, prenom, email, telephone, role, notifications_email, notifications_sms, notifications_desktop, avatar_url, last_login_at, created_at')
+        .single()
+      
+      if (error) throw error
+      return data
     })
 
     return NextResponse.json(updatedUser)

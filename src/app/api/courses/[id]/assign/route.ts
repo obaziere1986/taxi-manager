@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { executeWithRetry } from '@/lib/db'
+import { executeWithRetry } from '@/lib/supabase'
 
 export async function PUT(
   request: NextRequest,
@@ -10,11 +10,20 @@ export async function PUT(
     const body = await request.json()
     const { userId } = body
 
-    const course = await executeWithRetry(async (prisma) => {
+    const course = await executeWithRetry(async (supabase) => {
       // Vérifier que la course existe
-      const existingCourse = await prisma.course.findUnique({
-        where: { id }
-      })
+      const { data: existingCourse, error: courseError } = await supabase
+        .from('courses')
+        .select('*')
+        .eq('id', id)
+        .single()
+
+      if (courseError) {
+        if (courseError.code === 'PGRST116') {
+          throw new Error('Course non trouvée')
+        }
+        throw courseError
+      }
 
       if (!existingCourse) {
         throw new Error('Course non trouvée')
@@ -22,9 +31,18 @@ export async function PUT(
 
       // Si on assigne à un utilisateur, vérifier qu'il existe et qu'il est chauffeur
       if (userId) {
-        const existingUser = await prisma.user.findUnique({
-          where: { id: userId }
-        })
+        const { data: existingUser, error: userError } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', userId)
+          .single()
+
+        if (userError) {
+          if (userError.code === 'PGRST116') {
+            throw new Error('Utilisateur non trouvé')
+          }
+          throw userError
+        }
 
         if (!existingUser) {
           throw new Error('Utilisateur non trouvé')
@@ -35,21 +53,35 @@ export async function PUT(
         }
       }
 
-      return await prisma.course.update({
-        where: { id },
-        data: {
-          userId: userId || null,
+      // Mettre à jour la course
+      const { data: updatedCourse, error: updateError } = await supabase
+        .from('courses')
+        .update({
+          user_id: userId || null,
           statut: userId ? 'ASSIGNEE' : 'EN_ATTENTE',
-        },
-        include: {
-          client: {
-            select: { nom: true, prenom: true, telephone: true }
-          },
-          user: {
-            select: { nom: true, prenom: true, vehicule: true, role: true }
-          }
-        }
-      })
+        })
+        .eq('id', id)
+        .select(`
+          *,
+          clients!courses_client_id_fkey (
+            nom,
+            prenom,
+            telephone
+          ),
+          users!courses_user_id_fkey (
+            nom,
+            prenom,
+            vehicule,
+            role
+          )
+        `)
+        .single()
+
+      if (updateError) {
+        throw updateError
+      }
+
+      return updatedCourse
     })
 
     return NextResponse.json(course)

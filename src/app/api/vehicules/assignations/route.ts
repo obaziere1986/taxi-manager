@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { executeWithRetry } from '@/lib/db'
+import { executeWithRetry } from '@/lib/supabase'
 
 // GET - Récupérer toutes les assignations véhicule-user
 export async function GET(request: NextRequest) {
@@ -7,34 +7,34 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const vehiculeId = searchParams.get('vehiculeId')
     
-    const whereClause = vehiculeId ? { vehiculeId: vehiculeId } : {}
-    
-    const assignations = await executeWithRetry(async (prisma) => {
-      return await prisma.vehiculeAssignation.findMany({
-      where: whereClause,
-      include: {
-        vehicule: {
-          select: {
-            id: true,
-            marque: true,
-            modele: true,
-            immatriculation: true
-          }
-        },
-        user: {
-          select: {
-            id: true,
-            nom: true,
-            prenom: true,
-            role: true
-          }
-        }
-      },
-        orderBy: [
-          { actif: 'desc' },  // Assignations actives en premier
-          { dateDebut: 'desc' }  // Plus récentes en premier
-        ]
-      })
+    const assignations = await executeWithRetry(async (supabase) => {
+      let query = supabase
+        .from('vehicule_assignations')
+        .select(`
+          *,
+          vehicule:vehicules(
+            id,
+            marque,
+            modele,
+            immatriculation
+          ),
+          user:users(
+            id,
+            nom,
+            prenom,
+            role
+          )
+        `)
+        .order('actif', { ascending: false })
+        .order('date_debut', { ascending: false })
+      
+      if (vehiculeId) {
+        query = query.eq('vehicule_id', vehiculeId)
+      }
+      
+      const { data, error } = await query
+      if (error) throw error
+      return data || []
     })
 
     console.log(`📊 Récupéré ${assignations.length} assignations`)

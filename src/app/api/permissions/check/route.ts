@@ -1,8 +1,56 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
-import { RoleUtilisateur } from '@prisma/client'
+import { executeWithRetry } from '@/lib/supabase'
+import type { RoleUtilisateur } from '@/lib/supabase'
+
+// GET - Vérifier une permission spécifique
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const permission = searchParams.get('permission')
+    const role = searchParams.get('role') || 'Chauffeur' // Par défaut Chauffeur
+
+    if (!permission) {
+      return NextResponse.json({ error: 'Permission manquante' }, { status: 400 })
+    }
+
+    const session = await getServerSession(authOptions)
+    if (!session?.user || session.user.role !== 'Admin') {
+      return NextResponse.json({ error: 'Non autorisé' }, { status: 403 })
+    }
+
+    // Vérifier si la permission existe pour ce rôle
+    const hasPermission = await executeWithRetry(async (supabase) => {
+      // D'abord récupérer l'ID de la permission
+      const { data: permissionData, error: permError } = await supabase
+        .from('permissions')
+        .select('id')
+        .eq('nom', permission)
+        .single()
+      
+      if (permError || !permissionData) {
+        return false
+      }
+
+      // Puis vérifier si cette permission est accordée au rôle
+      const { data, error } = await supabase
+        .from('role_permissions')
+        .select('*')
+        .eq('role', role)
+        .eq('permission_id', permissionData.id)
+        .single()
+      
+      return !error && data
+    })
+
+    return NextResponse.json({ hasPermission: !!hasPermission })
+
+  } catch (error) {
+    console.error('Erreur lors de la vérification de permission:', error)
+    return NextResponse.json({ hasPermission: false })
+  }
+}
 
 // POST - Vérifier les permissions d'un utilisateur
 export async function POST(request: NextRequest) {
@@ -31,7 +79,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Vérifier que le rôle est valide
-    if (!Object.values(RoleUtilisateur).includes(session.user.role as RoleUtilisateur)) {
+    const validRoles = ['Admin', 'Planner', 'Chauffeur']
+    if (!validRoles.includes(session.user.role)) {
       return NextResponse.json({ 
         permissions: requestedPermissions.reduce((acc, permission) => {
           acc[permission] = false
@@ -41,19 +90,19 @@ export async function POST(request: NextRequest) {
     }
 
     // Récupérer les permissions actives du rôle de l'utilisateur
-    const rolePermissions = await prisma.rolePermission.findMany({
-      where: {
-        role: session.user.role as RoleUtilisateur,
-        active: true,
-        permission: {
-          nom: {
-            in: requestedPermissions
-          }
-        }
-      },
-      include: {
-        permission: true
-      }
+    const rolePermissions = await executeWithRetry(async (supabase) => {
+      const { data, error } = await supabase
+        .from('role_permissions')
+        .select(`
+          *,
+          permission:permissions(*)
+        `)
+        .eq('role', session.user.role)
+        .eq('active', true)
+        .in('permission.nom', requestedPermissions)
+      
+      if (error) throw error
+      return data || []
     })
 
     // Construire la map des permissions

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { executeWithRetry } from '@/lib/db'
+import { executeWithRetry } from '@/lib/supabase'
 
 // GET - Récupérer tous les utilisateurs (remplace l'ancienne API chauffeurs)
 export async function GET(request: NextRequest) {
@@ -7,22 +7,48 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const role = searchParams.get('role') // Filtre optionnel par rôle
     
-    const users = await executeWithRetry(async (prisma) => {
-      const whereClause = role ? { role: role as 'Admin' | 'Planner' | 'Chauffeur' } : {}
+    const users = await executeWithRetry(async (supabase) => {
+      let query = supabase
+        .from('users')
+        .select('*')
+        .eq('actif', true)  // Ne récupérer que les utilisateurs actifs
+        .order('nom', { ascending: true })
+        .order('prenom', { ascending: true })
       
-      return await prisma.user.findMany({
-        where: whereClause,
-        orderBy: [
-          { actif: 'desc' },
-          { nom: 'asc' },
-          { prenom: 'asc' }
-        ],
-        include: {
-          _count: {
-            select: { courses: true }
+      // Appliquer le filtre par rôle si spécifié
+      if (role) {
+        query = query.eq('role', role)
+      }
+      
+      const { data: usersData, error: usersError } = await query
+      
+      if (usersError) {
+        console.error('Erreur lors de la récupération des utilisateurs:', usersError)
+        throw usersError
+      }
+
+      // Pour chaque utilisateur, compter ses courses (simuler le _count de Prisma)
+      const usersWithCounts = await Promise.all(
+        (usersData || []).map(async (user) => {
+          const { count, error: countError } = await supabase
+            .from('courses')
+            .select('*', { count: 'exact', head: true })
+            .eq('user_id', user.id)
+          
+          if (countError) {
+            console.warn('Erreur lors du comptage des courses pour l\'utilisateur', user.id, ':', countError)
           }
-        }
-      })
+          
+          return {
+            ...user,
+            _count: {
+              courses: count || 0
+            }
+          }
+        })
+      )
+
+      return usersWithCounts
     })
 
     return NextResponse.json(users)
@@ -50,18 +76,27 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const user = await executeWithRetry(async (prisma) => {
+    const user = await executeWithRetry(async (supabase) => {
       // Vérifier que l'email n'existe pas
-      const existingUser = await prisma.user.findUnique({
-        where: { email: email.toLowerCase() }
-      })
+      const { data: existingUser, error: checkError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('email', email.toLowerCase())
+        .single()
+
+      if (checkError && checkError.code !== 'PGRST116') {
+        // PGRST116 = not found, c'est normal
+        throw checkError
+      }
 
       if (existingUser) {
         throw new Error('EMAIL_EXISTS')
       }
 
-      return await prisma.user.create({
-        data: {
+      // Créer le nouvel utilisateur
+      const { data: newUser, error: insertError } = await supabase
+        .from('users')
+        .insert({
           nom: nom.toUpperCase(),
           prenom,
           email: email.toLowerCase(),
@@ -69,15 +104,27 @@ export async function POST(request: NextRequest) {
           role,
           statut: statut || 'DISPONIBLE',
           vehicule: vehicule || null,
-          vehiculeId: vehiculeId || null,
-          actif: true
-        },
-        include: {
-          _count: {
-            select: { courses: true }
-          }
+          vehicule_id: vehiculeId || null,
+          actif: true,
+          failed_logins: 0,
+          notifications_email: true,
+          notifications_sms: false,
+          notifications_desktop: true
+        })
+        .select()
+        .single()
+
+      if (insertError) {
+        throw insertError
+      }
+
+      // Ajouter le count des courses (0 pour un nouvel utilisateur)
+      return {
+        ...newUser,
+        _count: {
+          courses: 0
         }
-      })
+      }
     })
 
     return NextResponse.json(user, { status: 201 })

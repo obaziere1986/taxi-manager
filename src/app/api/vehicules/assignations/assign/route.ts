@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { executeWithRetry } from '@/lib/db'
+import { executeWithRetry } from '@/lib/supabase'
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,87 +13,92 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const assignation = await executeWithRetry(async (prisma) => {
+    const assignation = await executeWithRetry(async (supabase) => {
       // Vérifier que l'utilisateur existe
-      const user = await prisma.user.findUnique({
-        where: { id: userId }
-      })
-
-      if (!user) {
+      const { data: user, error: userError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .single()
+      
+      if (userError || !user) {
         throw new Error('Utilisateur non trouvé')
       }
 
       // Vérifier si le véhicule existe et est actif
-      const vehicule = await prisma.vehicule.findUnique({
-        where: { id: vehiculeId }
-      })
-
-      if (!vehicule || !vehicule.actif) {
+      const { data: vehicule, error: vehiculeError } = await supabase
+        .from('vehicules')
+        .select('*')
+        .eq('id', vehiculeId)
+        .single()
+      
+      if (vehiculeError || !vehicule || !vehicule.actif) {
         throw new Error('Véhicule non trouvé ou inactif')
       }
 
       // Terminer les assignations actives existantes pour cet utilisateur
-      await prisma.vehiculeAssignation.updateMany({
-        where: {
-          userId: userId,
-          actif: true
-        },
-        data: {
+      const { error: endUserAssignError } = await supabase
+        .from('vehicule_assignations')
+        .update({
           actif: false,
-          dateFin: new Date()
-        }
-      })
+          date_fin: new Date().toISOString()
+        })
+        .eq('user_id', userId)
+        .eq('actif', true)
+      
+      if (endUserAssignError) throw endUserAssignError
 
       // Terminer les assignations actives existantes pour ce véhicule
-      await prisma.vehiculeAssignation.updateMany({
-        where: {
-          vehiculeId: vehiculeId,
-          actif: true
-        },
-        data: {
+      const { error: endVehicleAssignError } = await supabase
+        .from('vehicule_assignations')
+        .update({
           actif: false,
-          dateFin: new Date()
-        }
-      })
+          date_fin: new Date().toISOString()
+        })
+        .eq('vehicule_id', vehiculeId)
+        .eq('actif', true)
+      
+      if (endVehicleAssignError) throw endVehicleAssignError
 
       // Créer la nouvelle assignation
-      const newAssignation = await prisma.vehiculeAssignation.create({
-        data: {
-          userId,
-          vehiculeId,
-          dateDebut: dateDebut ? new Date(dateDebut) : new Date(),
+      const { data: newAssignation, error: createError } = await supabase
+        .from('vehicule_assignations')
+        .insert({
+          user_id: userId,
+          vehicule_id: vehiculeId,
+          date_debut: dateDebut ? new Date(dateDebut).toISOString() : new Date().toISOString(),
           actif: true,
           notes
-        },
-        include: {
-          user: {
-            select: {
-              id: true,
-              nom: true,
-              prenom: true,
-              role: true
-            }
-          },
-          vehicule: {
-            select: {
-              id: true,
-              marque: true,
-              modele: true,
-              immatriculation: true
-            }
-          }
-        }
-      })
+        })
+        .select(`
+          *,
+          user:users(
+            id,
+            nom,
+            prenom,
+            role
+          ),
+          vehicule:vehicules(
+            id,
+            marque,
+            modele,
+            immatriculation
+          )
+        `)
+        .single()
+      
+      if (createError) throw createError
 
       // Mettre à jour l'utilisateur avec le véhicule assigné (si c'est un chauffeur)
       if (user.role === 'Chauffeur') {
-        await prisma.user.update({
-          where: { id: userId },
-          data: {
-            vehicule: `${vehicule.marque} ${vehicule.modele} (${vehicule.immatriculation})`,
-            vehiculeId: vehiculeId
-          }
-        })
+        const { error: updateUserError } = await supabase
+          .from('users')
+          .update({
+            vehicule_id: vehiculeId
+          })
+          .eq('id', userId)
+        
+        if (updateUserError) throw updateUserError
       }
 
       return newAssignation

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from 'react'
-import { useSession } from 'next-auth/react'
+import { useSession, update } from 'next-auth/react'
 import { PageHeader } from '@/components/page-header'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -14,6 +14,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Separator } from "@/components/ui/separator"
+import { PhoneInput } from "@/components/ui/phone-input"
+import { PlateInput } from "@/components/ui/plate-input"
 import { 
   Car, 
   Users, 
@@ -37,7 +39,9 @@ import {
   UserRoundMinus,
   Camera,
   Bell,
-  Save
+  Save,
+  Copy,
+  CalendarPlus
 } from "lucide-react"
 import { VehiculeModal } from '@/components/vehicules/VehiculeModal'
 import { DeleteVehiculeModal } from '@/components/vehicules/DeleteVehiculeModal'
@@ -46,7 +50,10 @@ import { DeleteUserModal } from '@/components/effectifs/DeleteUserModal'
 import { VehiculeAssignationModal } from '@/components/effectifs/VehiculeAssignationModal'
 import { VehicleAssignModal } from '@/components/vehicules/VehicleAssignModal'
 import { getVehiculeAlerts, getAlertBadgeVariant } from '@/lib/vehicule-alerts'
+import { CalendarPreferences } from '@/components/settings/CalendarPreferences'
+import { useCalendarPermission } from '@/hooks/useCalendarPermission'
 import { ProtectedComponent } from '@/components/auth/ProtectedComponent'
+import { CompanySettings } from '@/components/settings/CompanySettings'
 
 interface Vehicule {
   id: string
@@ -114,6 +121,7 @@ interface User {
   actif: boolean
   createdAt: string
   updatedAt: string
+  calendar_token?: string
 }
 
 
@@ -136,11 +144,14 @@ interface CombinedUser {
   actif: boolean
   createdAt: string
   source: 'users'
+  calendar_token?: string
 }
 
 export default function ParametresPage() {
   const { data: session } = useSession()
   const [activeTab, setActiveTab] = useState("profil")
+  const { isEnabled: calendarEnabled, getCalendarUrl } = useCalendarPermission()
+  const [copiedCalendar, setCopiedCalendar] = useState<string | null>(null)
   const [vehicules, setVehicules] = useState<Vehicule[]>([])
   const [assignations, setAssignations] = useState<VehiculeAssignation[]>([])
   const [users, setUsers] = useState<User[]>([])
@@ -913,11 +924,39 @@ export default function ParametresPage() {
                                     </p>
                                   )}
                                   <p className="text-xs text-muted-foreground">
-                                    Utilisateur depuis le {new Date(person.createdAt).toLocaleDateString('fr-FR')}
+                                    Utilisateur depuis le {person.created_at ? new Date(person.created_at).toLocaleDateString('fr-FR') : 'Date inconnue'}
                                   </p>
                                 </div>
                               </div>
                               <div className="flex gap-2">
+                                {/* Calendrier ICS pour les chauffeurs */}
+                                {person.role === 'Chauffeur' && calendarEnabled && person.calendar_token && (
+                                  <Button 
+                                    variant={copiedCalendar === person.id ? "default" : "outline"}
+                                    size="sm"
+                                    title={copiedCalendar === person.id ? "Lien copié !" : "Copier le lien calendrier ICS"}
+                                    onClick={async () => {
+                                      const url = getCalendarUrl(person.calendar_token!)
+                                      if (url) {
+                                        try {
+                                          await navigator.clipboard.writeText(url)
+                                          setCopiedCalendar(person.id)
+                                          setTimeout(() => setCopiedCalendar(null), 2000)
+                                        } catch (error) {
+                                          alert('Erreur lors de la copie')
+                                        }
+                                      }
+                                    }}
+                                    className={copiedCalendar === person.id ? "bg-green-600 hover:bg-green-700" : ""}
+                                  >
+                                    {copiedCalendar === person.id ? (
+                                      <Calendar className="h-4 w-4" />
+                                    ) : (
+                                      <CalendarPlus className="h-4 w-4" />
+                                    )}
+                                  </Button>
+                                )}
+                                
                                 {/* Tous les utilisateurs peuvent avoir un véhicule assigné */}
                                 <Button 
                                   variant="outline" 
@@ -974,134 +1013,11 @@ export default function ParametresPage() {
           {/* Section Préférences */}
           <TabsContent value="preferences" className="space-y-6">
             {/* Entreprise & Identité */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Settings className="h-5 w-5" />
-                  Informations de l'entreprise
-                </CardTitle>
-                <CardDescription>
-                  Identité et coordonnées de votre société de taxi
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label>Nom de la société</Label>
-                    <Input defaultValue="Taxis Excellence" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>SIRET</Label>
-                    <Input placeholder="123 456 789 01234" />
-                  </div>
-                </div>
-                
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label>Téléphone principal</Label>
-                    <Input placeholder="01.23.45.67.89" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Email de contact</Label>
-                    <Input type="email" placeholder="contact@taxi-excellence.fr" />
-                  </div>
-                </div>
-                
-                <div className="space-y-2">
-                  <Label>Adresse</Label>
-                  <Textarea 
-                    placeholder="123 Rue de la République
-75001 Paris" 
-                    rows={3}
-                  />
-                </div>
-              </CardContent>
-            </Card>
+            <CompanySettings />
 
-            {/* Configuration Opérationnelle */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Car className="h-5 w-5" />
-                  Configuration opérationnelle
-                </CardTitle>
-                <CardDescription>
-                  Paramètres de fonctionnement quotidien
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                {/* Horaires */}
-                <div className="space-y-4">
-                  <h4 className="font-medium">Horaires de service</h4>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label>Ouverture</Label>
-                      <Input type="time" defaultValue="06:00" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Fermeture</Label>
-                      <Input type="time" defaultValue="23:00" />
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Switch id="service24h" />
-                    <Label htmlFor="service24h">Service 24h/24</Label>
-                  </div>
-                </div>
+            {/* Calendriers ICS */}
+            <CalendarPreferences />
 
-                <Separator />
-
-                {/* Tarification */}
-                <div className="space-y-4">
-                  <h4 className="font-medium">Tarification</h4>
-                  <div className="grid gap-4 md:grid-cols-3">
-                    <div className="space-y-2">
-                      <Label>Prise en charge (€)</Label>
-                      <Input type="number" step="0.50" defaultValue="4.20" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Prix/km jour (€)</Label>
-                      <Input type="number" step="0.01" defaultValue="1.15" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Prix/km nuit (€)</Label>
-                      <Input type="number" step="0.01" defaultValue="1.50" />
-                    </div>
-                  </div>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label>Heure début tarif nuit</Label>
-                      <Input type="time" defaultValue="20:00" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Heure fin tarif nuit</Label>
-                      <Input type="time" defaultValue="07:00" />
-                    </div>
-                  </div>
-                </div>
-
-                <Separator />
-
-                {/* Temps & Distances */}
-                <div className="space-y-4">
-                  <h4 className="font-medium">Temps & distances</h4>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label>Durée moyenne course (min)</Label>
-                      <Input type="number" defaultValue="45" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Distance maximale (km)</Label>
-                      <Input type="number" defaultValue="100" />
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Switch id="confirmationAuto" defaultChecked />
-                    <Label htmlFor="confirmationAuto">Confirmation automatique des courses</Label>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
 
             {/* Notifications & Communications */}
             <Card>
@@ -1231,135 +1147,6 @@ export default function ParametresPage() {
             </Card>
           </TabsContent>
 
-          {/* Section Communications */}
-          <TabsContent value="communications" className="space-y-6">
-            <div className="grid gap-6 md:grid-cols-2">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Phone className="h-5 w-5" />
-                    SMS
-                  </CardTitle>
-                  <CardDescription>
-                    Configuration des notifications SMS
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <p className="font-medium">Service SMS</p>
-                      <p className="text-sm text-muted-foreground">Non configuré</p>
-                    </div>
-                    <Button>
-                      Configurer
-                    </Button>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <p className="font-medium">Notifications automatiques:</p>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex items-center justify-between">
-                        <span>Confirmation de course</span>
-                        <Badge variant="secondary" className="text-xs font-medium px-2 py-1">
-                          Désactivé
-                        </Badge>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span>Arrivée du chauffeur</span>
-                        <Badge variant="secondary" className="text-xs font-medium px-2 py-1">
-                          Désactivé
-                        </Badge>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span>Fin de course</span>
-                        <Badge variant="secondary" className="text-xs font-medium px-2 py-1">
-                          Désactivé
-                        </Badge>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <FileText className="h-5 w-5" />
-                    Génération PDF
-                  </CardTitle>
-                  <CardDescription>
-                    Planning et documents pour les chauffeurs
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <p className="font-medium">Documents disponibles:</p>
-                    <div className="space-y-2">
-                      <Button variant="outline" className="w-full justify-start">
-                        <FileText className="h-4 w-4 mr-2" />
-                        Planning quotidien chauffeur
-                      </Button>
-                      <Button variant="outline" className="w-full justify-start">
-                        <FileText className="h-4 w-4 mr-2" />
-                        Rapport hebdomadaire
-                      </Button>
-                      <Button variant="outline" className="w-full justify-start">
-                        <FileText className="h-4 w-4 mr-2" />
-                        Feuille de route
-                      </Button>
-                    </div>
-                  </div>
-
-                  <div className="border-t pt-4">
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <p className="font-medium">Envoi automatique</p>
-                        <p className="text-sm text-muted-foreground">Planning envoyé chaque matin à 7h</p>
-                      </div>
-                      <Button variant="outline" size="sm">
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Mail className="h-5 w-5" />
-                  Configuration email
-                </CardTitle>
-                <CardDescription>
-                  Paramètres SMTP pour l'envoi d'emails
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <p className="font-medium">Serveur SMTP</p>
-                      <p className="text-sm text-muted-foreground">Non configuré</p>
-                    </div>
-                    <Button variant="outline" size="sm">
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <p className="font-medium">Email expéditeur</p>
-                      <p className="text-sm text-muted-foreground">Non configuré</p>
-                    </div>
-                    <Button variant="outline" size="sm">
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
 
           {/* Section Permissions (Admin uniquement) */}
           {session?.user?.role === 'Admin' && (
@@ -1367,6 +1154,7 @@ export default function ParametresPage() {
               <PermissionsSection />
             </TabsContent>
           )}
+
         </Tabs>
       </div>
       
@@ -1440,37 +1228,38 @@ function ProfilSection() {
   })
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
 
+  // Fonction pour charger les données du profil
+  const fetchProfile = async () => {
+    if (!session?.user) return
+    
+    try {
+      setIsLoadingProfile(true)
+      const response = await fetch('/api/users/profile')
+      
+      if (response.ok) {
+        const profileData = await response.json()
+        setFormData({
+          nom: profileData.nom || '',
+          prenom: profileData.prenom || '',
+          email: profileData.email || '',
+          telephone: profileData.telephone || '',
+          notificationsEmail: profileData.notifications_email ?? true,
+          notificationsSMS: profileData.notifications_sms ?? false,
+          notificationsDesktop: profileData.notifications_desktop ?? true,
+          avatarUrl: profileData.avatar_url || ''
+        })
+      } else {
+        console.error('Erreur lors du chargement du profil')
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement du profil:', error)
+    } finally {
+      setIsLoadingProfile(false)
+    }
+  }
+
   // Charger les données du profil depuis l'API
   useEffect(() => {
-    const fetchProfile = async () => {
-      if (!session?.user) return
-      
-      try {
-        setIsLoadingProfile(true)
-        const response = await fetch('/api/users/profile')
-        
-        if (response.ok) {
-          const profileData = await response.json()
-          setFormData({
-            nom: profileData.nom || '',
-            prenom: profileData.prenom || '',
-            email: profileData.email || '',
-            telephone: profileData.telephone || '',
-            notificationsEmail: profileData.notificationsEmail ?? true,
-            notificationsSMS: profileData.notificationsSMS ?? false,
-            notificationsDesktop: profileData.notificationsDesktop ?? true,
-            avatarUrl: profileData.avatarUrl || ''
-          })
-        } else {
-          console.error('Erreur lors du chargement du profil')
-        }
-      } catch (error) {
-        console.error('Erreur lors du chargement du profil:', error)
-      } finally {
-        setIsLoadingProfile(false)
-      }
-    }
-
     fetchProfile()
   }, [session])
 
@@ -1505,6 +1294,9 @@ function ProfilSection() {
           }
         })
         
+        // Recharger les données du profil pour mettre à jour l'interface
+        await fetchProfile()
+        
         alert('Photo de profil mise à jour avec succès !')
       } else {
         const error = await response.json()
@@ -1538,6 +1330,9 @@ function ProfilSection() {
             avatarUrl: null
           }
         })
+        
+        // Recharger les données du profil pour mettre à jour l'interface
+        await fetchProfile()
         
         alert('Photo de profil supprimée')
       } else {
@@ -1706,13 +1501,11 @@ function ProfilSection() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="telephone">Numéro de téléphone</Label>
-              <Input
+              <PhoneInput
                 id="telephone"
-                type="tel"
+                label="Numéro de téléphone"
                 value={formData.telephone}
-                onChange={(e) => handleInputChange('telephone', e.target.value)}
-                placeholder="06 12 34 56 78"
+                onChange={(value) => handleInputChange('telephone', value)}
               />
             </div>
           </div>
@@ -1865,13 +1658,14 @@ function PermissionsSection() {
 
   const getModuleLabel = (module: string) => {
     switch (module) {
-      case 'users': return 'Utilisateurs'
-      case 'vehicles': return 'Véhicules'
-      case 'courses': return 'Courses'
-      case 'clients': return 'Clients'
-      case 'analytics': return 'Analytics'
-      case 'settings': return 'Paramètres'
-      case 'permissions': return 'Permissions'
+      case 'users': return 'Gestion des utilisateurs'
+      case 'vehicles': return 'Gestion des véhicules'
+      case 'courses': return 'Gestion des courses'
+      case 'clients': return 'Gestion des clients'
+      case 'analytics': return 'Tableaux de bord et statistiques'
+      case 'settings': return 'Configuration système'
+      case 'permissions': return 'Gestion des permissions'
+      case 'calendar': return 'Fonctionnalités calendrier'
       default: return module
     }
   }
@@ -1879,12 +1673,38 @@ function PermissionsSection() {
   const getActionLabel = (action: string) => {
     switch (action) {
       case 'create': return 'Créer'
-      case 'read': return 'Voir'
+      case 'read': return 'Consulter'
       case 'update': return 'Modifier'
       case 'delete': return 'Supprimer'
       case 'assign': return 'Assigner'
       case 'manage': return 'Gérer'
+      case 'export': return 'Exporter'
       default: return action
+    }
+  }
+
+  const getPermissionDescription = (permissionName: string) => {
+    switch (permissionName) {
+      case 'calendar.export': return 'Permet aux chauffeurs d\'exporter leur planning au format ICS pour leurs applications calendrier'
+      case 'users.read': return 'Accès en lecture à la liste des utilisateurs'
+      case 'users.create': return 'Autorisation pour créer de nouveaux utilisateurs'
+      case 'users.update': return 'Autorisation pour modifier les informations des utilisateurs'
+      case 'users.delete': return 'Autorisation pour supprimer des utilisateurs'
+      case 'vehicles.read': return 'Accès en lecture à la liste des véhicules'
+      case 'vehicles.create': return 'Autorisation pour ajouter de nouveaux véhicules'
+      case 'vehicles.update': return 'Autorisation pour modifier les informations des véhicules'
+      case 'vehicles.delete': return 'Autorisation pour supprimer des véhicules'
+      case 'courses.read': return 'Accès en lecture à la liste des courses'
+      case 'courses.create': return 'Autorisation pour créer de nouvelles courses'
+      case 'courses.update': return 'Autorisation pour modifier les courses'
+      case 'courses.delete': return 'Autorisation pour supprimer des courses'
+      case 'courses.assign': return 'Autorisation pour assigner des courses aux chauffeurs'
+      case 'clients.read': return 'Accès en lecture à la liste des clients'
+      case 'clients.create': return 'Autorisation pour ajouter de nouveaux clients'
+      case 'clients.update': return 'Autorisation pour modifier les informations des clients'
+      case 'clients.delete': return 'Autorisation pour supprimer des clients'
+      case 'analytics.read': return 'Accès aux tableaux de bord et statistiques'
+      default: return null
     }
   }
 
@@ -1930,25 +1750,35 @@ function PermissionsSection() {
                       <h4 className="font-medium text-sm text-muted-foreground mb-2 uppercase tracking-wide">
                         {getModuleLabel(module)}
                       </h4>
-                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                      <div className="space-y-3">
                         {modulePermissions.map((permission: any) => {
                           const isActive = rolePermissions[role]?.[permission.nom] || false
+                          const description = getPermissionDescription(permission.nom)
                           return (
-                            <div key={permission.nom} className="flex items-center space-x-2">
-                              <Switch
-                                id={`${role}-${permission.nom}`}
-                                checked={isActive}
-                                onCheckedChange={(checked) => 
-                                  updateRolePermissions(role, permission.nom, checked)
-                                }
-                                disabled={saving}
-                              />
-                              <Label 
-                                htmlFor={`${role}-${permission.nom}`}
-                                className="text-sm cursor-pointer"
-                              >
-                                {getActionLabel(permission.action)}
-                              </Label>
+                            <div key={permission.nom} className="flex items-start justify-between p-2 rounded border">
+                              <div className="flex-1">
+                                <div className="flex items-center space-x-2">
+                                  <Switch
+                                    id={`${role}-${permission.nom}`}
+                                    checked={isActive}
+                                    onCheckedChange={(checked) => 
+                                      updateRolePermissions(role, permission.nom, checked)
+                                    }
+                                    disabled={saving}
+                                  />
+                                  <Label 
+                                    htmlFor={`${role}-${permission.nom}`}
+                                    className="text-sm font-medium cursor-pointer"
+                                  >
+                                    {getActionLabel(permission.action)}
+                                  </Label>
+                                </div>
+                                {description && (
+                                  <p className="text-xs text-muted-foreground mt-1 ml-6">
+                                    {description}
+                                  </p>
+                                )}
+                              </div>
                             </div>
                           )
                         })}

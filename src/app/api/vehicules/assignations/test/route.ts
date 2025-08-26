@@ -1,34 +1,34 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { executeWithRetry } from '@/lib/supabase'
 
 // GET - Test simple des assignations
 export async function GET() {
   try {
     console.log('🔄 Test API assignations...')
     
-    const assignations = await prisma.vehiculeAssignation.findMany({
-      include: {
-        vehicule: {
-          select: {
-            id: true,
-            marque: true,
-            modele: true,
-            immatriculation: true
-          }
-        },
-        user: {
-          select: {
-            id: true,
-            nom: true,
-            prenom: true,
-            role: true
-          }
-        }
-      },
-      orderBy: [
-        { actif: 'desc' },
-        { dateDebut: 'desc' }
-      ]
+    const assignations = await executeWithRetry(async (supabase) => {
+      const { data, error } = await supabase
+        .from('vehicule_assignations')
+        .select(`
+          *,
+          vehicule:vehicules(
+            id,
+            marque,
+            modele,
+            immatriculation
+          ),
+          user:users(
+            id,
+            nom,
+            prenom,
+            role
+          )
+        `)
+        .order('actif', { ascending: false })
+        .order('date_debut', { ascending: false })
+      
+      if (error) throw error
+      return data || []
     })
 
     console.log(`✅ ${assignations.length} assignations récupérées`)

@@ -1,34 +1,45 @@
 import { NextResponse } from 'next/server'
-import { executeWithRetry } from '@/lib/db'
+import { executeWithRetry } from '@/lib/supabase'
 
 export async function GET() {
   try {
-    const performance = await executeWithRetry(async (prisma) => {
+    const performance = await executeWithRetry(async (supabase) => {
       // Date d'il y a 30 jours
       const thirtyDaysAgo = new Date()
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
       
-      // Récupérer tous les chauffeurs (users avec role Chauffeur)
-      const chauffeurs = await prisma.user.findMany({
-        where: { 
-          role: 'Chauffeur',
-          actif: true
-        },
-        include: {
-          courses: {
-            where: {
-              statut: 'TERMINEE', // Seulement les courses terminées
-              dateHeure: {
-                gte: thirtyDaysAgo // 30 derniers jours
-              }
-            }
-          }
-        }
-      })
+      // Récupérer tous les chauffeurs actifs (users avec role Chauffeur)
+      const { data: chauffeurs, error: chauffeursError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('role', 'Chauffeur')
+        .eq('actif', true)
+
+      if (chauffeursError) {
+        console.error('Erreur lors de la récupération des chauffeurs:', chauffeursError)
+        throw chauffeursError
+      }
+
+      if (!chauffeurs || chauffeurs.length === 0) {
+        return []
+      }
+
+      // Récupérer les courses terminées des 30 derniers jours pour tous les chauffeurs
+      const { data: courses, error: coursesError } = await supabase
+        .from('courses')
+        .select('user_id, id')
+        .eq('statut', 'TERMINEE')
+        .gte('date_heure', thirtyDaysAgo.toISOString())
+        .in('user_id', chauffeurs.map(c => c.id))
+
+      if (coursesError) {
+        console.error('Erreur lors de la récupération des courses:', coursesError)
+        throw coursesError
+      }
 
       // Calculer les métriques pour chaque chauffeur
       const performanceData = chauffeurs.map(chauffeur => {
-        const coursesTerminees = chauffeur.courses // Déjà filtrées sur TERMINEE dans la requête
+        const coursesTerminees = courses?.filter(c => c.user_id === chauffeur.id) || []
 
         return {
           id: chauffeur.id,

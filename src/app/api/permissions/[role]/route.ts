@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
-import { RoleUtilisateur } from '@prisma/client'
+import { executeWithRetry } from '@/lib/supabase'
+import type { RoleUtilisateur } from '@/lib/supabase'
 
 // PUT - Mettre à jour les permissions d'un rôle
 export async function PUT(
@@ -21,7 +21,8 @@ export async function PUT(
     const { permissions } = body // { permissionName: boolean }
 
     // Vérifier que le rôle est valide
-    if (!Object.values(RoleUtilisateur).includes(role as RoleUtilisateur)) {
+    const validRoles = ['Admin', 'Planner', 'Chauffeur']
+    if (!validRoles.includes(role)) {
       return NextResponse.json({ error: 'Rôle invalide' }, { status: 400 })
     }
 
@@ -34,35 +35,66 @@ export async function PUT(
 
     // Traiter chaque permission
     for (const [permissionName, isActive] of Object.entries(permissions)) {
-      const permission = await prisma.permission.findUnique({
-        where: { nom: permissionName }
+      const permission = await executeWithRetry(async (supabase) => {
+        const { data, error } = await supabase
+          .from('permissions')
+          .select('id')
+          .eq('nom', permissionName)
+          .single()
+        
+        if (error && error.code !== 'PGRST116') throw error
+        return data
       })
 
       if (!permission) continue
 
-      await prisma.rolePermission.upsert({
-        where: {
-          role_permissionId: {
-            role: role as RoleUtilisateur,
-            permissionId: permission.id
-          }
-        },
-        update: { 
-          active: Boolean(isActive),
-          updatedAt: new Date()
-        },
-        create: {
-          role: role as RoleUtilisateur,
-          permissionId: permission.id,
-          active: Boolean(isActive)
+      await executeWithRetry(async (supabase) => {
+        // Essayer de mettre à jour d'abord
+        const { data: existing } = await supabase
+          .from('role_permissions')
+          .select('id')
+          .eq('role', role)
+          .eq('permission_id', permission.id)
+          .single()
+
+        if (existing) {
+          // Mettre à jour
+          const { error } = await supabase
+            .from('role_permissions')
+            .update({ 
+              active: Boolean(isActive),
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', existing.id)
+          
+          if (error) throw error
+        } else {
+          // Créer
+          const { error } = await supabase
+            .from('role_permissions')
+            .insert({
+              role: role as RoleUtilisateur,
+              permission_id: permission.id,
+              active: Boolean(isActive)
+            })
+          
+          if (error) throw error
         }
       })
     }
 
     // Récupérer les permissions mises à jour
-    const updatedRolePermissions = await prisma.rolePermission.findMany({
-      where: { role: role as RoleUtilisateur },
-      include: { permission: true }
+    const updatedRolePermissions = await executeWithRetry(async (supabase) => {
+      const { data, error } = await supabase
+        .from('role_permissions')
+        .select(`
+          *,
+          permission:permissions(*)
+        `)
+        .eq('role', role)
+      
+      if (error) throw error
+      return data || []
     })
 
     const permissionsMap = updatedRolePermissions.reduce((acc, rp) => {

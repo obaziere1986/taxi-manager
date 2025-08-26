@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { PhoneInput } from "@/components/ui/phone-input"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
@@ -98,8 +99,9 @@ export function CourseModal({
 
   // Initialiser le formulaire quand course change
   useEffect(() => {
+    console.log('CourseModal - useEffect:', { course, clients: clients.length, users: users.length })
     if (course) {
-      setFormData({
+      const formData = {
         origine: course.origine,
         destination: course.destination,
         dateHeure: new Date(course.dateHeure).toLocaleString('sv-SE').slice(0, 16),
@@ -107,7 +109,9 @@ export function CourseModal({
         userId: course.user?.id || 'none',
         notes: course.notes || '',
         statut: course.statut
-      })
+      }
+      console.log('CourseModal - Setting form data:', formData)
+      setFormData(formData)
     } else {
       // Réinitialiser pour création
       setFormData({
@@ -159,7 +163,7 @@ export function CourseModal({
       // Convertir "none" en chaîne vide pour userId
       const userId = formData.userId === 'none' ? '' : formData.userId
       
-      // Logique automatique du statut selon l'assignation
+      // ✅ LOGIQUE RENFORCÉE : Synchronisation automatique statut/chauffeur
       let autoStatut = formData.statut
       
       console.log('CourseModal - Logique assignation:', {
@@ -169,15 +173,24 @@ export function CourseModal({
         mode: mode
       })
       
-      // Si on assigne un chauffeur à une course EN_ATTENTE, passer à ASSIGNEE
-      if (userId && formData.statut === 'EN_ATTENTE') {
+      // Si on assigne un chauffeur mais le statut est EN_ATTENTE, passer à ASSIGNEE
+      if (userId && ['EN_ATTENTE'].includes(formData.statut)) {
         autoStatut = 'ASSIGNEE'
-        console.log('CourseModal - Statut changé automatiquement vers ASSIGNEE')
+        console.log('🔄 CourseModal - Statut auto-corrigé: EN_ATTENTE → ASSIGNEE (chauffeur assigné)')
       }
-      // Si on retire le chauffeur d'une course ASSIGNEE, retourner à EN_ATTENTE
-      else if (!userId && formData.statut === 'ASSIGNEE') {
+      // Si on retire le chauffeur mais le statut est ASSIGNEE/EN_COURS, revenir à EN_ATTENTE
+      else if (!userId && ['ASSIGNEE', 'EN_COURS'].includes(formData.statut)) {
         autoStatut = 'EN_ATTENTE'
-        console.log('CourseModal - Statut changé automatiquement vers EN_ATTENTE')
+        console.log('🔄 CourseModal - Statut auto-corrigé: ' + formData.statut + ' → EN_ATTENTE (chauffeur retiré)')
+      }
+      // Validation de cohérence globale
+      else if (userId && formData.statut === 'EN_ATTENTE') {
+        autoStatut = 'ASSIGNEE'
+        console.log('🔄 CourseModal - Correction incohérence: chauffeur présent mais EN_ATTENTE → ASSIGNEE')
+      }
+      else if (!userId && ['ASSIGNEE', 'EN_COURS', 'TERMINEE'].includes(formData.statut)) {
+        autoStatut = 'EN_ATTENTE'
+        console.log('🔄 CourseModal - Correction incohérence: pas de chauffeur mais ' + formData.statut + ' → EN_ATTENTE')
       }
       
       const dataToSave = {
@@ -198,6 +211,13 @@ export function CourseModal({
 
   const handleStatusUpdate = async (newStatus: string) => {
     if (!course || !onStatusUpdate) return
+
+    // Demander confirmation pour l'annulation
+    if (newStatus === 'ANNULEE') {
+      if (!confirm('Êtes-vous sûr de vouloir annuler cette course ?')) {
+        return
+      }
+    }
 
     setLoading(true)
     try {
@@ -357,7 +377,7 @@ export function CourseModal({
               
               {course.statut !== 'ANNULEE' && course.statut !== 'TERMINEE' && (
                 <Button 
-                  variant="outline"
+                  variant="destructive"
                   onClick={() => handleStatusUpdate('ANNULEE')}
                   disabled={loading}
                 >
@@ -520,12 +540,11 @@ export function CourseModal({
                         </div>
                       </div>
                       <div>
-                        <Label htmlFor="clientTelephone">Téléphone *</Label>
-                        <Input
+                        <PhoneInput
                           id="clientTelephone"
+                          label="Téléphone *"
                           value={newClientData.telephone}
-                          onChange={(e) => setNewClientData({ ...newClientData, telephone: e.target.value })}
-                          placeholder="06 12 34 56 78"
+                          onChange={(value) => setNewClientData({ ...newClientData, telephone: value })}
                           required
                         />
                       </div>

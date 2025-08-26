@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
+import { executeWithRetry } from '@/lib/supabase'
 
 // GET - Récupérer toutes les permissions et leurs assignations par rôle
 export async function GET() {
@@ -20,18 +20,28 @@ export async function GET() {
     }
 
     // Récupérer toutes les permissions
-    const permissions = await prisma.permission.findMany({
-      orderBy: [
-        { module: 'asc' },
-        { action: 'asc' }
-      ]
+    const permissions = await executeWithRetry(async (supabase) => {
+      const { data, error } = await supabase
+        .from('permissions')
+        .select('*')
+        .order('module', { ascending: true })
+        .order('action', { ascending: true })
+      
+      if (error) throw error
+      return data || []
     })
 
     // Récupérer les assignations de permissions par rôle
-    const rolePermissions = await prisma.rolePermission.findMany({
-      include: {
-        permission: true
-      }
+    const rolePermissions = await executeWithRetry(async (supabase) => {
+      const { data, error } = await supabase
+        .from('role_permissions')
+        .select(`
+          *,
+          permission:permissions(*)
+        `)
+      
+      if (error) throw error
+      return data || []
     })
 
     // Organiser les données par module et rôle

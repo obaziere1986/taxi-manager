@@ -1,13 +1,20 @@
 import { NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { executeWithRetry } from '@/lib/supabase'
 
 // GET - Test simple pour vérifier les permissions (sans auth)
 export async function GET() {
   try {
     console.log('🔍 Test API permissions...')
     
-    // Test de connexion Prisma
-    const permissionsCount = await prisma.permission.count()
+    // Test de connexion Supabase
+    const permissionsCount = await executeWithRetry(async (supabase) => {
+      const { count, error } = await supabase
+        .from('permissions')
+        .select('*', { count: 'exact', head: true })
+      
+      if (error) throw error
+      return count || 0
+    })
     console.log('📊 Nombre de permissions:', permissionsCount)
     
     if (permissionsCount === 0) {
@@ -18,14 +25,28 @@ export async function GET() {
     }
     
     // Test simple de récupération des permissions
-    const permissions = await prisma.permission.findMany({
-      take: 5,
-      orderBy: { module: 'asc' }
+    const permissions = await executeWithRetry(async (supabase) => {
+      const { data, error } = await supabase
+        .from('permissions')
+        .select('*')
+        .order('module', { ascending: true })
+        .limit(5)
+      
+      if (error) throw error
+      return data || []
     })
     
-    const rolePermissions = await prisma.rolePermission.findMany({
-      take: 5,
-      include: { permission: true }
+    const rolePermissions = await executeWithRetry(async (supabase) => {
+      const { data, error } = await supabase
+        .from('role_permissions')
+        .select(`
+          *,
+          permission:permissions(*)
+        `)
+        .limit(5)
+      
+      if (error) throw error
+      return data || []
     })
     
     console.log('✅ Permissions trouvées:', permissions.length)

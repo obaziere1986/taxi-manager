@@ -104,7 +104,8 @@ export function VehiculeAlerts() {
       if (Array.isArray(data)) {
         setVehicules(data)
       } else {
-        console.error('Données invalides pour véhicules:', data)
+        // Gérer le cas où il n'y a pas de véhicules ou erreur API
+        console.warn('Aucun véhicule trouvé ou format de données inattendu:', data)
         setVehicules([])
       }
     } catch (error) {
