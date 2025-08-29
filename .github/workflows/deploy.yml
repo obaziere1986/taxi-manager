@@ -89,6 +89,9 @@ jobs:
             # Arrêt de l'ancienne version
             pm2 stop taxi-manager || true
             
+            # Correction des permissions avant remplacement
+            chown -R root:root /var/www/flowcab.fr.new
+            
             # Remplacement atomique
             if [ -d "/var/www/flowcab.fr" ]; then
               mv /var/www/flowcab.fr /var/www/flowcab.fr.old
@@ -115,8 +118,8 @@ jobs:
       - name: 🧪 Test deployment
         run: |
           sleep 10
-          curl -f -L -I http://flowcab.fr || exit 1
-          echo "✅ Application accessible sur flowcab.fr"
+          curl -f -L -I http://app.flowcab.fr || exit 1
+          echo "✅ Application accessible sur app.flowcab.fr"
 
       - name: 📧 Notify on failure
         if: failure()
