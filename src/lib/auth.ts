@@ -23,11 +23,11 @@ export const authOptions: NextAuthOptions = {
 
         const supabase = getSupabaseClient()
 
-        // Rechercher l'utilisateur par login ou email
+        // Rechercher l'utilisateur par email
         const { data: users, error } = await supabase
           .from('users')
           .select('*')
-          .or(`login.eq.${credentials.login},email.eq.${credentials.login}`)
+          .eq('email', credentials.login)
           .eq('actif', true)
 
         if (error || !users || users.length === 0) {
