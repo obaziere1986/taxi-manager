@@ -86,18 +86,18 @@ export function getRoleBadge(role: string): BadgeStyle {
   switch (role) {
     case 'Admin':
       return {
-        variant: 'destructive',
-        className: baseClasses
+        variant: 'outline',
+        className: `${baseClasses} bg-black text-white border-black`
       }
     case 'Planner':
       return {
-        variant: 'default',
-        className: baseClasses
+        variant: 'outline',
+        className: `${baseClasses} bg-gray-500 text-white border-gray-500`
       }
     case 'Chauffeur':
       return {
-        variant: 'secondary', 
-        className: baseClasses
+        variant: 'outline',
+        className: `${baseClasses} bg-white text-black border-gray-300`
       }
     default:
       return {
@@ -155,6 +155,14 @@ export function getDefaultBadge(): BadgeStyle {
   return {
     variant: 'outline',
     className: "text-xs font-medium px-2 py-1"
+  }
+}
+
+// Badge pour le statut inactif
+export function getInactiveBadge(): BadgeStyle {
+  return {
+    variant: 'outline',
+    className: "text-xs font-medium px-2 py-1 bg-red-500 text-white border-red-500"
   }
 }
 

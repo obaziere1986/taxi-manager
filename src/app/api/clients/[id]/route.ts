@@ -8,10 +8,10 @@ export async function GET(
   try {
     const { id } = await params
     const client = await executeWithRetry(async (supabase) => {
-      // Récupérer le client
+      // Récupérer le client avec reviews_disabled
       const { data: clientData, error: clientError } = await supabase
         .from('clients')
-        .select('*')
+        .select('*, reviews_disabled')
         .eq('id', id)
         .single()
 
@@ -75,7 +75,7 @@ export async function PUT(
   try {
     const { id } = await params
     const body = await request.json()
-    const { nom, prenom, telephone, email, adresses } = body
+    const { nom, prenom, telephone, email, adresses, reviews_disabled } = body
 
     const client = await executeWithRetry(async (supabase) => {
       const { data, error } = await supabase
@@ -86,6 +86,7 @@ export async function PUT(
           telephone,
           email,
           adresses: adresses || null,
+          reviews_disabled: reviews_disabled !== undefined ? reviews_disabled : false,
         })
         .eq('id', id)
         .select()

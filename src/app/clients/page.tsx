@@ -12,7 +12,8 @@ import { PageHeader } from '@/components/page-header'
 import { ProtectedComponent } from '@/components/auth/ProtectedComponent'
 import { PhoneInput } from '@/components/ui/phone-input'
 import { formatPhoneDisplay } from '@/lib/phone-utils'
-import { Users, Phone, Mail, Plus, Edit, Trash2, MapPin } from 'lucide-react'
+import { Users, Phone, Mail, Plus, Edit, Trash2, MapPin, MessageSquareOff } from 'lucide-react'
+import { Switch } from '@/components/ui/switch'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import { getCourseStatusBadge, formatStatut } from '@/lib/badge-utils'
@@ -25,6 +26,7 @@ interface Client {
   telephone: string
   email?: string
   adresses?: string[]
+  reviews_disabled?: boolean
   createdAt: string
   updatedAt: string
   courses?: Course[]
@@ -384,6 +386,14 @@ export default function ClientsPage() {
                               <div className="flex items-center gap-1 text-sm text-muted-foreground">
                                 <Mail className="h-3 w-3" />
                                 {client.email}
+                              </div>
+                            )}
+                            {client.reviews_disabled && (
+                              <div className="flex items-center gap-1 mt-1">
+                                <Badge variant="outline" className="text-xs bg-red-50 text-red-700 border-red-200">
+                                  <MessageSquareOff className="h-3 w-3 mr-1" />
+                                  Pas d'avis
+                                </Badge>
                               </div>
                             )}
                           </div>
@@ -748,6 +758,22 @@ export default function ClientsPage() {
                           type="email"
                           value={editingClient.email || selectedClient.email || ''}
                           onChange={(e) => setEditingClient({ ...editingClient, email: e.target.value })}
+                        />
+                      </div>
+                      
+                      <div className="flex items-center justify-between p-3 border rounded-lg bg-gray-50">
+                        <div>
+                          <Label className="text-sm font-medium flex items-center gap-2">
+                            <MessageSquareOff className="h-4 w-4" />
+                            Désactiver les avis clients
+                          </Label>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Ne pas envoyer de demandes d'avis à ce client
+                          </p>
+                        </div>
+                        <Switch
+                          checked={editingClient.reviews_disabled ?? selectedClient?.reviews_disabled ?? false}
+                          onCheckedChange={(checked) => setEditingClient({ ...editingClient, reviews_disabled: checked })}
                         />
                       </div>
                     </div>

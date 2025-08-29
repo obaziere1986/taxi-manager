@@ -98,7 +98,12 @@ function CourseCard({
                 }
               </div>
             ) : (
-              <span className="text-muted-foreground text-sm">Non assigné</span>
+              <span className="text-muted-foreground text-sm">
+                {course.notes && course.notes.includes('utilisateur supprimé') ? 
+                  'Utilisateur supprimé' : 
+                  'Non assigné'
+                }
+              </span>
             )}
           </div>
 

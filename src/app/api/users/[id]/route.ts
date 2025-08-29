@@ -174,13 +174,23 @@ export async function PUT(
   }
 }
 
-// DELETE - Supprimer un utilisateur
+// DELETE - Supprimer un utilisateur (désactivation par défaut, suppression définitive avec permanent=true)
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params
+    let body = {}
+    
+    // Lire le body s'il existe
+    try {
+      body = await request.json()
+    } catch {
+      // Pas de body JSON, c'est normal pour une simple désactivation
+    }
+    
+    const { permanent } = body as { permanent?: boolean }
     
     await executeWithRetry(async (supabase) => {
       // Vérifier que l'utilisateur existe
@@ -201,55 +211,103 @@ export async function DELETE(
         throw new Error('USER_NOT_FOUND')
       }
 
-      // Vérifier qu'il n'a pas de courses en cours
-      const { data: activeCourses, error: coursesError } = await supabase
-        .from('courses')
-        .select('id')
-        .eq('user_id', id)
-        .eq('statut', 'EN_COURS')
+      if (permanent) {
+        // Suppression définitive - mettre à jour les références d'abord
+        console.log('🗑️ Suppression définitive de l\'utilisateur:', existingUser.nom, existingUser.prenom)
+        
+        // Mettre à jour les courses pour remplacer l'utilisateur par null et ajouter une note
+        const { error: coursesUpdateError } = await supabase
+          .from('courses')
+          .update({ 
+            user_id: null,
+            notes: `Course originalement assignée à: ${existingUser.prenom} ${existingUser.nom} (utilisateur supprimé)`
+          })
+          .eq('user_id', id)
 
-      if (coursesError) {
-        throw coursesError
+        if (coursesUpdateError) {
+          console.error('Erreur lors de la mise à jour des courses:', coursesUpdateError)
+        }
+
+        // Terminer toutes les assignations véhicules actives
+        const { error: assignmentsUpdateError } = await supabase
+          .from('vehicule_assignations')
+          .update({ 
+            actif: false,
+            date_fin: new Date().toISOString(),
+            notes: `Assignation terminée - utilisateur ${existingUser.prenom} ${existingUser.nom} supprimé définitivement`
+          })
+          .eq('user_id', id)
+          .eq('actif', true)
+
+        if (assignmentsUpdateError) {
+          console.error('Erreur lors de la mise à jour des assignations:', assignmentsUpdateError)
+        }
+
+        // Supprimer définitivement l'utilisateur
+        const { error: deleteError } = await supabase
+          .from('users')
+          .delete()
+          .eq('id', id)
+
+        if (deleteError) {
+          throw deleteError
+        }
+        
+        return { type: 'permanent', message: 'Utilisateur supprimé définitivement' }
+      } else {
+        // Désactivation (suppression "logique")
+        console.log('🚫 Désactivation de l\'utilisateur:', existingUser.nom, existingUser.prenom)
+        
+        // Vérifier qu'il n'a pas de courses en cours
+        const { data: activeCourses, error: coursesError } = await supabase
+          .from('courses')
+          .select('id')
+          .eq('user_id', id)
+          .eq('statut', 'EN_COURS')
+
+        if (coursesError) {
+          throw coursesError
+        }
+
+        if (activeCourses && activeCourses.length > 0) {
+          throw new Error('USER_HAS_ACTIVE_COURSES')
+        }
+
+        // Terminer toutes les assignations véhicules actives
+        const { error: assignmentsUpdateError } = await supabase
+          .from('vehicule_assignations')
+          .update({ 
+            actif: false,
+            date_fin: new Date().toISOString(),
+            notes: `Assignation terminée automatiquement - utilisateur désactivé`
+          })
+          .eq('user_id', id)
+          .eq('actif', true)
+
+        if (assignmentsUpdateError) {
+          console.error('Erreur lors de la mise à jour des assignations:', assignmentsUpdateError)
+        }
+
+        // Désactiver l'utilisateur
+        const { error: deactivateError } = await supabase
+          .from('users')
+          .update({ actif: false })
+          .eq('id', id)
+
+        if (deactivateError) {
+          throw deactivateError
+        }
+        
+        return { type: 'deactivate', message: 'Utilisateur désactivé avec succès' }
       }
-
-      if (activeCourses && activeCourses.length > 0) {
-        throw new Error('USER_HAS_ACTIVE_COURSES')
-      }
-
-      // Vérifier qu'il n'a pas d'assignations actives
-      const { data: activeAssignments, error: assignmentsError } = await supabase
-        .from('vehicule_assignations')
-        .select('id')
-        .eq('user_id', id)
-        .eq('actif', true)
-
-      if (assignmentsError) {
-        throw assignmentsError
-      }
-
-      if (activeAssignments && activeAssignments.length > 0) {
-        throw new Error('USER_HAS_ACTIVE_ASSIGNMENTS')
-      }
-
-      // Supprimer l'utilisateur
-      const { error: deleteError } = await supabase
-        .from('users')
-        .delete()
-        .eq('id', id)
-
-      if (deleteError) {
-        throw deleteError
-      }
-
-      return true
     })
 
     return NextResponse.json(
-      { message: 'Utilisateur supprimé avec succès' },
+      { message: permanent ? 'Utilisateur supprimé définitivement avec succès' : 'Utilisateur désactivé avec succès' },
       { status: 200 }
     )
   } catch (error) {
-    console.error('Erreur lors de la suppression de l\'utilisateur:', error)
+    console.error('Erreur lors de la suppression/désactivation de l\'utilisateur:', error)
     
     if (error instanceof Error) {
       if (error.message === 'USER_NOT_FOUND') {
@@ -261,21 +319,14 @@ export async function DELETE(
       
       if (error.message === 'USER_HAS_ACTIVE_COURSES') {
         return NextResponse.json(
-          { error: 'Impossible de supprimer un utilisateur avec des courses en cours' },
-          { status: 409 }
-        )
-      }
-      
-      if (error.message === 'USER_HAS_ACTIVE_ASSIGNMENTS') {
-        return NextResponse.json(
-          { error: 'Impossible de supprimer un utilisateur avec des assignations actives' },
+          { error: 'Impossible de désactiver un utilisateur avec des courses en cours' },
           { status: 409 }
         )
       }
     }
     
     return NextResponse.json(
-      { error: 'Erreur lors de la suppression de l\'utilisateur' },
+      { error: 'Erreur lors de la suppression/désactivation de l\'utilisateur' },
       { status: 500 }
     )
   }

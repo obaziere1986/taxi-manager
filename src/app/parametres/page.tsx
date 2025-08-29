@@ -1,13 +1,15 @@
 "use client"
 
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useSession, update } from 'next-auth/react'
 import { PageHeader } from '@/components/page-header'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { getRoleBadge, getUserStatusBadge, getAssignationBadge, UNIFORM_BADGE_CLASSES } from '@/lib/badge-utils'
+import { getRoleBadge, getUserStatusBadge, getAssignationBadge, getInactiveBadge, UNIFORM_BADGE_CLASSES } from '@/lib/badge-utils'
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -41,7 +43,10 @@ import {
   Bell,
   Save,
   Copy,
-  CalendarPlus
+  CalendarPlus,
+  HelpCircle,
+  Check,
+  X
 } from "lucide-react"
 import { VehiculeModal } from '@/components/vehicules/VehiculeModal'
 import { DeleteVehiculeModal } from '@/components/vehicules/DeleteVehiculeModal'
@@ -54,6 +59,8 @@ import { CalendarPreferences } from '@/components/settings/CalendarPreferences'
 import { useCalendarPermission } from '@/hooks/useCalendarPermission'
 import { ProtectedComponent } from '@/components/auth/ProtectedComponent'
 import { CompanySettings } from '@/components/settings/CompanySettings'
+import MailSettings from '@/components/mail/MailSettings'
+import ReviewsAdmin from '@/components/reviews/ReviewsAdmin'
 
 interface Vehicule {
   id: string
@@ -159,6 +166,9 @@ export default function ParametresPage() {
   const [loading, setLoading] = useState(true)
   const [loadingAssignations, setLoadingAssignations] = useState(false)
   const [loadingUsers, setLoadingUsers] = useState(false)
+  const [showInactiveUsers, setShowInactiveUsers] = useState(false)
+  const [inactiveUsers, setInactiveUsers] = useState<User[]>([])
+  const [loadingInactiveUsers, setLoadingInactiveUsers] = useState(false)
   
   // États des modales véhicules
   const [vehiculeModal, setVehiculeModal] = useState<{
@@ -281,13 +291,54 @@ export default function ParametresPage() {
     }
   }
 
+  const fetchInactiveUsers = async () => {
+    try {
+      setLoadingInactiveUsers(true)
+      console.log('🔄 Chargement des utilisateurs inactifs...')
+      
+      const response = await fetch('/api/users?inactive=true')
+      console.log('📡 Réponse API users inactifs:', response.status, response.statusText)
+      
+      if (!response.ok) {
+        throw new Error(`Erreur API: ${response.status} ${response.statusText}`)
+      }
+      
+      const data = await response.json()
+      console.log('📊 Utilisateurs inactifs reçus:', data.length, 'utilisateurs')
+      
+      // Vérifier que data est un tableau
+      if (Array.isArray(data)) {
+        setInactiveUsers(data)
+      } else {
+        console.error('❌ Données invalides pour utilisateurs inactifs:', data)
+        setInactiveUsers([])
+      }
+    } catch (error) {
+      console.error('❌ Erreur lors du chargement des utilisateurs inactifs:', error)
+      setInactiveUsers([]) // Assurer qu'on a un tableau vide en cas d'erreur
+    } finally {
+      setLoadingInactiveUsers(false)
+    }
+  }
+
 
   // Enrichir les utilisateurs avec leurs assignations véhicules
   useEffect(() => {
     const enrichUsersWithVehicles = async () => {
+      let allUsers: User[]
+      
+      if (showInactiveUsers) {
+        // Combiner les deux listes en évitant les doublons
+        const userIds = new Set(users.map(u => u.id))
+        const uniqueInactiveUsers = inactiveUsers.filter(u => !userIds.has(u.id))
+        allUsers = [...users, ...uniqueInactiveUsers]
+      } else {
+        allUsers = users
+      }
+      
       const combined: CombinedUser[] = [
         // Tous les utilisateurs (incluant les chauffeurs)
-        ...users.map(user => ({
+        ...allUsers.map(user => ({
           ...user,
           role: user.role,
           source: 'users' as const
@@ -328,10 +379,10 @@ export default function ParametresPage() {
       setCombinedUsers(enrichedUsers)
     }
 
-    if (users.length > 0) {
+    if (users.length > 0 || inactiveUsers.length > 0) {
       enrichUsersWithVehicles()
     }
-  }, [users])
+  }, [users, inactiveUsers, showInactiveUsers])
 
   const handleSaveVehicule = async (vehiculeData: Vehicule) => {
     try {
@@ -398,7 +449,8 @@ export default function ParametresPage() {
         throw new Error(error.error || 'Erreur lors de la sauvegarde')
       }
       
-      await fetchUsers()
+      // Rafraîchir les deux listes
+      await refreshUserLists()
       setUserModal({ isOpen: false, mode: 'create', user: null })
     } catch (error) {
       console.error('Erreur:', error)
@@ -417,11 +469,60 @@ export default function ParametresPage() {
         throw new Error(error.error || 'Erreur lors de la suppression')
       }
       
-      await fetchUsers()
+      await refreshUserLists()
       setDeleteUserModal({ isOpen: false, user: null })
     } catch (error) {
       console.error('Erreur:', error)
       throw error
+    }
+  }
+
+  const refreshUserLists = async () => {
+    await fetchUsers()
+    if (showInactiveUsers) {
+      await fetchInactiveUsers()
+    }
+  }
+
+  const handleToggleUserStatus = async (userId: string, currentStatus: boolean) => {
+    try {
+      const response = await fetch(`/api/users/${userId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ actif: !currentStatus })
+      })
+      
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Erreur lors de la modification du statut')
+      }
+      
+      // Recharger automatiquement les listes appropriées
+      await refreshUserLists()
+    } catch (error) {
+      console.error('Erreur:', error)
+      alert('Erreur lors de la modification du statut de l\'utilisateur')
+    }
+  }
+
+  const handlePermanentDeleteUser = async (userId: string) => {
+    try {
+      const response = await fetch(`/api/users/${userId}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ permanent: true })
+      })
+      
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Erreur lors de la suppression définitive')
+      }
+      
+      // Recharger les listes appropriées
+      await refreshUserLists()
+    } catch (error) {
+      console.error('Erreur:', error)
+      alert('Erreur lors de la suppression définitive de l\'utilisateur')
     }
   }
 
@@ -511,7 +612,7 @@ export default function ParametresPage() {
           {/* Cacher les onglets pour les chauffeurs qui n'ont que le profil */}
           {session?.user?.role !== 'Chauffeur' && (
             <TabsList className={`grid w-full ${
-              session?.user?.role === 'Admin' ? 'grid-cols-5' : 'grid-cols-3'
+              session?.user?.role === 'Admin' ? 'grid-cols-7' : 'grid-cols-3'
             }`}>
               <TabsTrigger value="profil" className="flex items-center gap-2">
                 <User className="h-4 w-4" />
@@ -539,6 +640,18 @@ export default function ParametresPage() {
                 <TabsTrigger value="permissions" className="flex items-center gap-2">
                   <ShieldCheck className="h-4 w-4" />
                   Permissions
+                </TabsTrigger>
+              )}
+              {session?.user?.role === 'Admin' && (
+                <TabsTrigger value="notifications" className="flex items-center gap-2">
+                  <Bell className="h-4 w-4" />
+                  Notifications
+                </TabsTrigger>
+              )}
+              {session?.user?.role === 'Admin' && (
+                <TabsTrigger value="reviews" className="flex items-center gap-2">
+                  <MessageSquare className="h-4 w-4" />
+                  Avis Clients
                 </TabsTrigger>
               )}
             </TabsList>
@@ -840,13 +953,29 @@ export default function ParametresPage() {
                       Gérer tous les utilisateurs : admins, planneurs et chauffeurs
                     </CardDescription>
                   </div>
-                  {/* Seuls les Admins peuvent créer des utilisateurs */}
-                  {session?.user?.role === 'Admin' && (
-                    <Button onClick={() => setUserModal({ isOpen: true, mode: 'create', user: null })}>
-                      <Plus className="h-4 w-4 mr-2" />
-                      Nouvel utilisateur
+                  <div className="flex gap-2">
+                    {/* Bouton pour afficher/cacher les utilisateurs désactivés */}
+                    <Button 
+                      variant={showInactiveUsers ? "default" : "outline"}
+                      onClick={() => {
+                        setShowInactiveUsers(!showInactiveUsers)
+                        if (!showInactiveUsers && inactiveUsers.length === 0) {
+                          fetchInactiveUsers()
+                        }
+                      }}
+                    >
+                      <UserRoundMinus className="h-4 w-4 mr-2" />
+                      {showInactiveUsers ? "Masquer désactivés" : "Afficher désactivés"}
                     </Button>
-                  )}
+                    
+                    {/* Seuls les Admins peuvent créer des utilisateurs */}
+                    {session?.user?.role === 'Admin' && (
+                      <Button onClick={() => setUserModal({ isOpen: true, mode: 'create', user: null })}>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Nouvel utilisateur
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>
@@ -893,7 +1022,7 @@ export default function ParametresPage() {
                         }
 
                         return (
-                          <div key={`${person.source}-${person.id}`} className="border rounded-lg p-4">
+                          <div key={`user-${person.id}-${person.actif ? 'active' : 'inactive'}`} className="border rounded-lg p-4">
                             <div className="flex justify-between items-start">
                               <div className="space-y-2">
                                 <div className="flex items-center gap-2">
@@ -902,11 +1031,13 @@ export default function ParametresPage() {
                                     {person.nom.toUpperCase()}, {person.prenom}
                                   </h3>
                                   {getRoleDisplay(person.role)}
-                                  {getStatutDisplay(person.statut)}
+                                  {/* Afficher le statut seulement si la personne est active */}
+                                  {person.actif && getStatutDisplay(person.statut)}
+                                  {/* Badge inactif rouge si la personne n'est pas active */}
                                   {!person.actif && (
                                     <Badge 
-                                      variant="secondary" 
-                                      className="text-xs font-medium px-2 py-1 ml-2"
+                                      variant={getInactiveBadge().variant}
+                                      className={getInactiveBadge().className}
                                     >
                                       Inactif
                                     </Badge>
@@ -957,19 +1088,21 @@ export default function ParametresPage() {
                                   </Button>
                                 )}
                                 
-                                {/* Tous les utilisateurs peuvent avoir un véhicule assigné */}
-                                <Button 
-                                  variant="outline" 
-                                  size="sm"
-                                  title="Assigner un véhicule"
-                                  onClick={() => setAssignationModal({ 
-                                    isOpen: true, 
-                                    chauffeur: null,
-                                    user: users.find(u => u.id === person.id) || null
-                                  })}
-                                >
-                                  <Car className="h-4 w-4" />
-                                </Button>
+                                {/* Tous les utilisateurs actifs peuvent avoir un véhicule assigné */}
+                                {person.actif && (
+                                  <Button 
+                                    variant="outline" 
+                                    size="sm"
+                                    title="Assigner un véhicule"
+                                    onClick={() => setAssignationModal({ 
+                                      isOpen: true, 
+                                      chauffeur: null,
+                                      user: users.find(u => u.id === person.id) || null
+                                    })}
+                                  >
+                                    <Car className="h-4 w-4" />
+                                  </Button>
+                                )}
                                 {/* Empêcher les Planners de modifier les Admins */}
                                 {(session?.user?.role === 'Admin' || 
                                   (session?.user?.role === 'Planner' && person.role !== 'Admin')) && (
@@ -977,25 +1110,62 @@ export default function ParametresPage() {
                                     variant="outline" 
                                     size="sm"
                                     onClick={() => {
-                                      const user = users.find(u => u.id === person.id)
+                                      const user = users.find(u => u.id === person.id) || inactiveUsers.find(u => u.id === person.id)
                                       setUserModal({ isOpen: true, mode: 'edit', user })
                                     }}
                                   >
                                     <Edit className="h-4 w-4" />
                                   </Button>
                                 )}
-                                {/* Seuls les Admins peuvent supprimer des utilisateurs */}
+                                {/* Boutons selon le statut actif/inactif */}
                                 {session?.user?.role === 'Admin' && (
-                                  <Button 
-                                    variant="outline" 
-                                    size="sm"
-                                    onClick={() => {
-                                      const user = users.find(u => u.id === person.id)
-                                      setDeleteUserModal({ isOpen: true, user })
-                                    }}
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
+                                  <>
+                                    {person.actif ? (
+                                      // Utilisateur actif - bouton de désactivation
+                                      <Button 
+                                        variant="outline" 
+                                        size="sm"
+                                        title="Désactiver l'utilisateur"
+                                        onClick={() => {
+                                          if (confirm(`Désactiver l'utilisateur ${person.prenom} ${person.nom} ?`)) {
+                                            handleToggleUserStatus(person.id, person.actif)
+                                          }
+                                        }}
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    ) : (
+                                      // Utilisateur inactif - boutons de réactivation et suppression définitive
+                                      <>
+                                        <Button 
+                                          variant="outline" 
+                                          size="sm"
+                                          title="Réactiver l'utilisateur"
+                                          onClick={() => {
+                                            if (confirm(`Réactiver l'utilisateur ${person.prenom} ${person.nom} ?`)) {
+                                              handleToggleUserStatus(person.id, person.actif)
+                                            }
+                                          }}
+                                          className="text-green-600 hover:text-green-700 hover:border-green-300"
+                                        >
+                                          <Check className="h-4 w-4" />
+                                        </Button>
+                                        <Button 
+                                          variant="outline" 
+                                          size="sm"
+                                          title="Supprimer définitivement"
+                                          onClick={() => {
+                                            if (confirm(`ATTENTION: Supprimer définitivement ${person.prenom} ${person.nom} ? Cette action est irréversible !`)) {
+                                              handlePermanentDeleteUser(person.id)
+                                            }
+                                          }}
+                                          className="text-red-600 hover:text-red-700 hover:border-red-300"
+                                        >
+                                          <X className="h-4 w-4" />
+                                        </Button>
+                                      </>
+                                    )}
+                                  </>
                                 )}
                               </div>
                             </div>
@@ -1018,133 +1188,13 @@ export default function ParametresPage() {
             {/* Calendriers ICS */}
             <CalendarPreferences />
 
-
-            {/* Notifications & Communications */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Phone className="h-5 w-5" />
-                  Notifications & Communications
-                </CardTitle>
-                <CardDescription>
-                  Configuration des alertes et communications automatiques
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                {/* SMS */}
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="font-medium">Notifications SMS</h4>
-                      <p className="text-sm text-muted-foreground">Envoyer des SMS automatiques aux clients</p>
-                    </div>
-                    <Switch id="smsEnabled" />
-                  </div>
-                  
-                  <div className="ml-6 space-y-3">
-                    <div className="flex items-center space-x-2">
-                      <Switch id="smsConfirmation" />
-                      <Label htmlFor="smsConfirmation">Confirmation de réservation</Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Switch id="smsArrivee" />
-                      <Label htmlFor="smsArrivee">Arrivée du chauffeur (5 min avant)</Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Switch id="smsFacture" />
-                      <Label htmlFor="smsFacture">Récapitulatif fin de course</Label>
-                    </div>
-                  </div>
-                </div>
-
-                <Separator />
-
-                {/* Email */}
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="font-medium">Notifications Email</h4>
-                      <p className="text-sm text-muted-foreground">Rapports et notifications par email</p>
-                    </div>
-                    <Switch id="emailEnabled" />
-                  </div>
-                  
-                  <div className="ml-6 space-y-3">
-                    <div className="flex items-center space-x-2">
-                      <Switch id="emailRapportQuotidien" />
-                      <Label htmlFor="emailRapportQuotidien">Rapport quotidien d'activité</Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Switch id="emailAlertes" />
-                      <Label htmlFor="emailAlertes">Alertes véhicules (entretien, contrôle technique)</Label>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Système & Sauvegardes */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <FileText className="h-5 w-5" />
-                  Système & Données
-                </CardTitle>
-                <CardDescription>
-                  Configuration système et gestion des données
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label>Fuseau horaire</Label>
-                    <Select defaultValue="Europe/Paris">
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Europe/Paris">Europe/Paris (UTC+1)</SelectItem>
-                        <SelectItem value="Europe/London">Europe/London (UTC+0)</SelectItem>
-                        <SelectItem value="America/New_York">America/New_York (UTC-5)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Devise</Label>
-                    <Select defaultValue="EUR">
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="EUR">Euro (€)</SelectItem>
-                        <SelectItem value="USD">Dollar ($)</SelectItem>
-                        <SelectItem value="GBP">Livre (£)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium">Sauvegarde automatique</p>
-                      <p className="text-sm text-muted-foreground">Sauvegarde quotidienne des données</p>
-                    </div>
-                    <Switch id="autoBackup" defaultChecked />
-                  </div>
-                  
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium">Dernière sauvegarde</p>
-                      <p className="text-sm text-muted-foreground">Aujourd'hui à 03:00</p>
-                    </div>
-                    <Button variant="outline" size="sm">
-                      Sauvegarder maintenant
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            {/* Actions de sauvegarde */}
+            <div className="flex justify-end pt-4">
+              <Button>
+                <Save className="h-4 w-4 mr-2" />
+                Sauvegarder les modifications
+              </Button>
+            </div>
           </TabsContent>
 
 
@@ -1152,6 +1202,20 @@ export default function ParametresPage() {
           {session?.user?.role === 'Admin' && (
             <TabsContent value="permissions" className="space-y-6">
               <PermissionsSection />
+            </TabsContent>
+          )}
+          
+          {/* Section Notifications (Admin uniquement) */}
+          {session?.user?.role === 'Admin' && (
+            <TabsContent value="notifications" className="space-y-6">
+              <MailSettings />
+            </TabsContent>
+          )}
+          
+          {/* Section Avis Clients (Admin uniquement) */}
+          {session?.user?.role === 'Admin' && (
+            <TabsContent value="reviews" className="space-y-6">
+              <ReviewsAdmin />
             </TabsContent>
           )}
 
@@ -1179,6 +1243,7 @@ export default function ParametresPage() {
         isOpen={userModal.isOpen}
         onClose={() => setUserModal({ isOpen: false, mode: 'create', user: null })}
         onSave={handleSaveUser}
+        onPermanentDelete={handlePermanentDeleteUser}
         user={userModal.user}
         mode={userModal.mode}
       />
@@ -1522,62 +1587,6 @@ function ProfilSection() {
         </CardContent>
       </Card>
 
-      {/* Préférences de notifications */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Bell className="h-5 w-5" />
-            Préférences de notifications
-          </CardTitle>
-          <CardDescription>
-            Choisissez comment vous souhaitez être notifié
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label className="text-base">Notifications par email</Label>
-              <p className="text-sm text-muted-foreground">
-                Recevoir les alertes importantes par email
-              </p>
-            </div>
-            <Switch
-              checked={formData.notificationsEmail}
-              onCheckedChange={(checked) => handleInputChange('notificationsEmail', checked)}
-            />
-          </div>
-
-          <Separator />
-
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label className="text-base">Notifications SMS</Label>
-              <p className="text-sm text-muted-foreground">
-                Recevoir les alertes urgentes par SMS
-              </p>
-            </div>
-            <Switch
-              checked={formData.notificationsSMS}
-              onCheckedChange={(checked) => handleInputChange('notificationsSMS', checked)}
-            />
-          </div>
-
-          <Separator />
-
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label className="text-base">Notifications bureau</Label>
-              <p className="text-sm text-muted-foreground">
-                Afficher les notifications dans le navigateur
-              </p>
-            </div>
-            <Switch
-              checked={formData.notificationsDesktop}
-              onCheckedChange={(checked) => handleInputChange('notificationsDesktop', checked)}
-            />
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Actions */}
       <div className="flex justify-end">
@@ -1658,14 +1667,14 @@ function PermissionsSection() {
 
   const getModuleLabel = (module: string) => {
     switch (module) {
-      case 'users': return 'Gestion des utilisateurs'
-      case 'vehicles': return 'Gestion des véhicules'
-      case 'courses': return 'Gestion des courses'
-      case 'clients': return 'Gestion des clients'
-      case 'analytics': return 'Tableaux de bord et statistiques'
-      case 'settings': return 'Configuration système'
-      case 'permissions': return 'Gestion des permissions'
-      case 'calendar': return 'Fonctionnalités calendrier'
+      case 'users': return 'Effectifs'
+      case 'vehicles': return 'Véhicules'
+      case 'courses': return 'Courses'
+      case 'clients': return 'Clients'
+      case 'analytics': return 'Dashboard'
+      case 'settings': return 'Paramètres'
+      case 'permissions': return 'Permissions'
+      case 'calendar': return 'Calendrier'
       default: return module
     }
   }
@@ -1722,75 +1731,118 @@ function PermissionsSection() {
   }
 
   return (
-    <div className="space-y-6">
+    <TooltipProvider>
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <ShieldCheck className="h-5 w-5" />
-            Gestion des permissions par rôle
+            Tableau comparatif des permissions
           </CardTitle>
           <CardDescription>
-            Configurez les droits d'accès pour chaque rôle utilisateur.
+            Comparez et configurez les droits d'accès pour les rôles Planner et Chauffeur.
             <br />
-            <strong>Note :</strong> Les permissions Admin ne peuvent pas être modifiées.
+            <strong>Note :</strong> Les Administrateurs ont tous les droits par défaut.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-6">
-            {['Planner', 'Chauffeur'].map(role => (
-              <div key={role} className="border rounded-lg p-4">
-                <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                  <Users className="h-5 w-5" />
-                  {getRoleLabel(role)}
-                </h3>
-                
-                <div className="space-y-4">
-                  {Object.entries(permissions).map(([module, modulePermissions]: [string, any]) => (
-                    <div key={module} className="border-l-4 border-muted pl-4">
-                      <h4 className="font-medium text-sm text-muted-foreground mb-2 uppercase tracking-wide">
-                        {getModuleLabel(module)}
-                      </h4>
-                      <div className="space-y-3">
-                        {modulePermissions.map((permission: any) => {
-                          const isActive = rolePermissions[role]?.[permission.nom] || false
-                          const description = getPermissionDescription(permission.nom)
-                          return (
-                            <div key={permission.nom} className="flex items-start justify-between p-2 rounded border">
-                              <div className="flex-1">
-                                <div className="flex items-center space-x-2">
-                                  <Switch
-                                    id={`${role}-${permission.nom}`}
-                                    checked={isActive}
-                                    onCheckedChange={(checked) => 
-                                      updateRolePermissions(role, permission.nom, checked)
-                                    }
-                                    disabled={saving}
-                                  />
-                                  <Label 
-                                    htmlFor={`${role}-${permission.nom}`}
-                                    className="text-sm font-medium cursor-pointer"
-                                  >
-                                    {getActionLabel(permission.action)}
-                                  </Label>
-                                </div>
-                                {description && (
-                                  <p className="text-xs text-muted-foreground mt-1 ml-6">
-                                    {description}
-                                  </p>
-                                )}
-                              </div>
-                            </div>
-                          )
-                        })}
-                      </div>
+          <div className="rounded-md border overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-gray-50">
+                  <TableHead className="font-semibold">Module / Action</TableHead>
+                  <TableHead className="text-center font-semibold">
+                    <div className="flex items-center justify-center gap-2">
+                      <Users className="h-4 w-4" />
+                      Planner
                     </div>
-                  ))}
-                </div>
-              </div>
-            ))}
+                  </TableHead>
+                  <TableHead className="text-center font-semibold">
+                    <div className="flex items-center justify-center gap-2">
+                      <User className="h-4 w-4" />
+                      Chauffeur
+                    </div>
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {Object.entries(permissions).map(([module, modulePermissions]: [string, any]) => (
+                  <React.Fragment key={module}>
+                    {/* En-tête du module */}
+                    <TableRow className="bg-gray-25">
+                      <TableCell colSpan={3} className="font-medium text-sm bg-gray-100 text-gray-700">
+                        <div className="flex items-center gap-2">
+                          {module === 'users' && <Users className="h-4 w-4" />}
+                          {module === 'vehicles' && <Car className="h-4 w-4" />}
+                          {module === 'courses' && <Calendar className="h-4 w-4" />}
+                          {module === 'clients' && <User className="h-4 w-4" />}
+                          {module === 'analytics' && <FileText className="h-4 w-4" />}
+                          {module === 'settings' && <Settings className="h-4 w-4" />}
+                          {module === 'permissions' && <Shield className="h-4 w-4" />}
+                          {module === 'calendar' && <Calendar className="h-4 w-4" />}
+                          {getModuleLabel(module)}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                    
+                    {/* Permissions du module */}
+                    {modulePermissions.map((permission: any) => {
+                      const plannerActive = rolePermissions['Planner']?.[permission.nom] || false
+                      const chauffeurActive = rolePermissions['Chauffeur']?.[permission.nom] || false
+                      const description = getPermissionDescription(permission.nom)
+                      
+                      return (
+                        <TableRow key={permission.nom} className="hover:bg-gray-50">
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">
+                                {getActionLabel(permission.action)}
+                              </span>
+                              {description && (
+                                <Tooltip>
+                                  <TooltipTrigger>
+                                    <HelpCircle className="h-4 w-4 text-gray-400 hover:text-gray-600" />
+                                  </TooltipTrigger>
+                                  <TooltipContent className="max-w-sm">
+                                    <p className="text-sm">{description}</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              )}
+                            </div>
+                          </TableCell>
+                          
+                          {/* Colonne Planner */}
+                          <TableCell className="text-center">
+                            <Switch
+                              checked={plannerActive}
+                              onCheckedChange={(checked) => 
+                                updateRolePermissions('Planner', permission.nom, checked)
+                              }
+                              disabled={saving}
+                              className="mx-auto"
+                            />
+                          </TableCell>
+                          
+                          {/* Colonne Chauffeur */}
+                          <TableCell className="text-center">
+                            <Switch
+                              checked={chauffeurActive}
+                              onCheckedChange={(checked) => 
+                                updateRolePermissions('Chauffeur', permission.nom, checked)
+                              }
+                              disabled={saving}
+                              className="mx-auto"
+                            />
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </React.Fragment>
+                ))}
+              </TableBody>
+            </Table>
           </div>
         </CardContent>
       </Card>
-    </div>
+    </TooltipProvider>
   )
 }

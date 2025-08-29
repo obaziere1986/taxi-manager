@@ -118,25 +118,13 @@ export function CompanySettings() {
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              <Settings className="h-5 w-5" />
-              Informations de l'entreprise
-            </CardTitle>
-            <CardDescription>
-              Identité et coordonnées de votre société de taxi
-            </CardDescription>
-          </div>
-          <Button onClick={handleSave} disabled={saving}>
-            {saving ? (
-              <Loader2 className="h-4 w-4 animate-spin mr-2" />
-            ) : (
-              <Save className="h-4 w-4 mr-2" />
-            )}
-            {saving ? 'Sauvegarde...' : 'Sauvegarder'}
-          </Button>
-        </div>
+        <CardTitle className="flex items-center gap-2">
+          <Settings className="h-5 w-5" />
+          Informations de l'entreprise
+        </CardTitle>
+        <CardDescription>
+          Identité et coordonnées de votre société de taxi
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Informations de base */}
@@ -227,123 +215,6 @@ export function CompanySettings() {
           </div>
         </div>
 
-        {/* Tarifs */}
-        <div className="space-y-4">
-          <h4 className="text-sm font-medium">Tarification</h4>
-          <div className="grid gap-4 md:grid-cols-3">
-            <div className="space-y-2">
-              <Label htmlFor="base_fare">Prise en charge (€)</Label>
-              <Input
-                id="base_fare"
-                type="number"
-                step="0.10"
-                value={formData.base_fare}
-                onChange={(e) => handleInputChange('base_fare', parseFloat(e.target.value) || 0)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="price_per_km_day">Prix/km jour (€)</Label>
-              <Input
-                id="price_per_km_day"
-                type="number"
-                step="0.01"
-                value={formData.price_per_km_day}
-                onChange={(e) => handleInputChange('price_per_km_day', parseFloat(e.target.value) || 0)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="price_per_km_night">Prix/km nuit (€)</Label>
-              <Input
-                id="price_per_km_night"
-                type="number"
-                step="0.01"
-                value={formData.price_per_km_night}
-                onChange={(e) => handleInputChange('price_per_km_night', parseFloat(e.target.value) || 0)}
-              />
-            </div>
-          </div>
-          
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="night_start_time">Début tarif nuit</Label>
-              <Input
-                id="night_start_time"
-                type="time"
-                value={formData.night_start_time}
-                onChange={(e) => handleInputChange('night_start_time', e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="night_end_time">Fin tarif nuit</Label>
-              <Input
-                id="night_end_time"
-                type="time"
-                value={formData.night_end_time}
-                onChange={(e) => handleInputChange('night_end_time', e.target.value)}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Paramètres opérationnels */}
-        <div className="space-y-4">
-          <h4 className="text-sm font-medium">Paramètres opérationnels</h4>
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="average_trip_duration">Durée moyenne course (min)</Label>
-              <Input
-                id="average_trip_duration"
-                type="number"
-                value={formData.average_trip_duration}
-                onChange={(e) => handleInputChange('average_trip_duration', parseInt(e.target.value) || 0)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="max_distance_km">Distance maximale (km)</Label>
-              <Input
-                id="max_distance_km"
-                type="number"
-                value={formData.max_distance_km}
-                onChange={(e) => handleInputChange('max_distance_km', parseInt(e.target.value) || 0)}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Localisation */}
-        <div className="space-y-4">
-          <h4 className="text-sm font-medium">Localisation</h4>
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="currency">Devise</Label>
-              <Select value={formData.currency} onValueChange={(value) => handleInputChange('currency', value)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="EUR">EUR (€)</SelectItem>
-                  <SelectItem value="USD">USD ($)</SelectItem>
-                  <SelectItem value="GBP">GBP (£)</SelectItem>
-                  <SelectItem value="CHF">CHF</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="language">Langue</Label>
-              <Select value={formData.language} onValueChange={(value) => handleInputChange('language', value)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="fr-FR">Français</SelectItem>
-                  <SelectItem value="en-US">English</SelectItem>
-                  <SelectItem value="es-ES">Español</SelectItem>
-                  <SelectItem value="de-DE">Deutsch</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </div>
       </CardContent>
     </Card>
   )

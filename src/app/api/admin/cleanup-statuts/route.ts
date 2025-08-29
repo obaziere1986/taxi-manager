@@ -78,7 +78,7 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      let fixResults = []
+      const fixResults = []
       if (fix && toFix.length > 0) {
         console.log(`Correction de ${toFix.length} courses...`)
         
