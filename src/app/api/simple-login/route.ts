@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from "bcryptjs"
-import jwt from 'jsonwebtoken'
+import { SignJWT } from 'jose'
 import { getSupabaseClient } from "@/lib/supabase"
 
 export async function POST(request: NextRequest) {
@@ -49,17 +49,18 @@ export async function POST(request: NextRequest) {
       }, { status: 401 })
     }
 
-    // Créer un token JWT simple
-    const token = jwt.sign(
-      { 
+    // Créer un token JWT avec jose
+    const secret = new TextEncoder().encode(process.env.NEXTAUTH_SECRET || 'fallback-secret')
+    const token = await new SignJWT({ 
         userId: user.id,
         email: user.email,
         role: user.role,
         name: `${user.prenom} ${user.nom}`
-      },
-      process.env.NEXTAUTH_SECRET || 'fallback-secret',
-      { expiresIn: '24h' }
-    )
+      })
+      .setProtectedHeader({ alg: 'HS256' })
+      .setIssuedAt()
+      .setExpirationTime('24h')
+      .sign(secret)
 
     // Mettre à jour dernière connexion
     await supabase

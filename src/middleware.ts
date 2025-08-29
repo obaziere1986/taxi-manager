@@ -37,8 +37,9 @@ export async function middleware(request: NextRequest) {
   
   // Vérifier la validité du token JWT
   try {
-    const jwt = require('jsonwebtoken')
-    jwt.verify(authToken, process.env.NEXTAUTH_SECRET || 'fallback-secret')
+    const { jwtVerify } = await import('jose')
+    const secret = new TextEncoder().encode(process.env.NEXTAUTH_SECRET || 'fallback-secret')
+    await jwtVerify(authToken, secret)
   } catch (error) {
     // Token invalide, rediriger vers login
     console.error('Token JWT invalide:', error)
