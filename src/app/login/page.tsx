@@ -114,9 +114,9 @@ export default function LoginPage() {
             <div className="mt-6 text-center text-sm text-gray-600">
               <p>Comptes de test disponibles :</p>
               <div className="mt-2 space-y-1 text-xs">
-                <p><strong>Admin:</strong> jean.dujardin / password123</p>
-                <p><strong>Planner:</strong> marion.cotillard / password123</p>
-                <p><strong>Chauffeur:</strong> omar.sy / password123</p>
+                <p><strong>Admin:</strong> jean.dujardin@taxicompany.fr / password123</p>
+                <p><strong>Planner:</strong> marion.cotillard@taxicompany.fr / password123</p>
+                <p><strong>Chauffeur:</strong> omar.sy@taxicompany.fr / password123</p>
               </div>
             </div>
           )}
