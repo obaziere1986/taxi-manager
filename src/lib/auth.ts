@@ -5,10 +5,10 @@ import bcrypt from "bcryptjs"
 import { getSupabaseClient } from "@/lib/supabase"
 
 export const authOptions: NextAuthOptions = {
-  adapter: SupabaseAdapter({
-    url: process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    secret: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  }),
+  // adapter: SupabaseAdapter({
+  //   url: process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  //   secret: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+  // }),
   providers: [
     CredentialsProvider({
       name: "credentials",
