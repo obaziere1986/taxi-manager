@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { PhoneInput } from "@/components/ui/phone-input"
+import { Trash2 } from "lucide-react"
 
 interface User {
   id: string
@@ -25,11 +26,12 @@ interface UserModalProps {
   isOpen: boolean
   onClose: () => void
   onSave: (user: User) => Promise<void>
+  onPermanentDelete?: (userId: string) => Promise<void>
   user?: User | null
   mode: 'create' | 'edit'
 }
 
-export function UserModal({ isOpen, onClose, onSave, user, mode }: UserModalProps) {
+export function UserModal({ isOpen, onClose, onSave, onPermanentDelete, user, mode }: UserModalProps) {
   const { data: session } = useSession()
   const [formData, setFormData] = useState<Partial<User>>({
     nom: '',
@@ -92,6 +94,24 @@ export function UserModal({ isOpen, onClose, onSave, user, mode }: UserModalProp
       alert('Erreur lors de la sauvegarde de l\'utilisateur')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handlePermanentDelete = async () => {
+    if (!user || !onPermanentDelete) return
+    
+    const confirmed = confirm(
+      `ATTENTION: Supprimer définitivement ${user.prenom} ${user.nom} ?\n\nCette action est irréversible et effacera l'utilisateur de la base de données.\nLes courses assignées afficheront "Utilisateur supprimé".`
+    )
+    
+    if (confirmed) {
+      try {
+        await onPermanentDelete(user.id)
+        onClose()
+      } catch (error) {
+        console.error('Erreur lors de la suppression définitive:', error)
+        alert('Erreur lors de la suppression définitive')
+      }
     }
   }
 
@@ -207,13 +227,31 @@ export function UserModal({ isOpen, onClose, onSave, user, mode }: UserModalProp
             <Label htmlFor="actif">Utilisateur actif</Label>
           </div>
 
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>
-              Annuler
-            </Button>
-            <Button type="submit" disabled={loading}>
-              {loading ? 'Sauvegarde...' : (mode === 'create' ? 'Créer' : 'Modifier')}
-            </Button>
+          <DialogFooter className="flex-col gap-4">
+            {/* Bouton de suppression définitive pour les utilisateurs inactifs */}
+            {mode === 'edit' && user && !user.actif && onPermanentDelete && (
+              <div className="flex w-full">
+                <Button 
+                  type="button" 
+                  variant="destructive" 
+                  onClick={handlePermanentDelete}
+                  className="w-full"
+                  disabled={loading}
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Supprimer définitivement
+                </Button>
+              </div>
+            )}
+            
+            <div className="flex gap-2 w-full">
+              <Button type="button" variant="outline" onClick={onClose} className="flex-1">
+                Annuler
+              </Button>
+              <Button type="submit" disabled={loading} className="flex-1">
+                {loading ? 'Sauvegarde...' : (mode === 'create' ? 'Créer' : 'Modifier')}
+              </Button>
+            </div>
           </DialogFooter>
         </form>
       </DialogContent>

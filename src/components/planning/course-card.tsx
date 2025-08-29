@@ -13,11 +13,16 @@ interface CourseCardProps {
     destination: string
     dateHeure: string
     statut: string
+    notes?: string
     client: {
       nom: string
       prenom: string
     }
     chauffeur?: {
+      nom: string
+      prenom: string
+    } | null
+    user?: {
       nom: string
       prenom: string
     } | null
@@ -79,11 +84,18 @@ export function CourseCard({ course }: CourseCardProps) {
             <span className="truncate">{course.client.prenom} {course.client.nom.toUpperCase()}</span>
           </div>
 
-          {course.chauffeur && (
+          {(course.chauffeur || course.user) ? (
             <div className="text-xs font-medium text-blue-600">
-              {course.chauffeur.prenom} {course.chauffeur.nom.toUpperCase()}
+              {course.user ? 
+                `${course.user.prenom} ${course.user.nom.toUpperCase()}` :
+                `${course.chauffeur?.prenom} ${course.chauffeur?.nom.toUpperCase()}`
+              }
             </div>
-          )}
+          ) : (course.notes && course.notes.includes('utilisateur supprimé')) ? (
+            <div className="text-xs font-medium text-red-500 italic">
+              Utilisateur supprimé
+            </div>
+          ) : null}
         </div>
       </CardContent>
     </Card>

@@ -4,10 +4,10 @@ import { executeWithRetry } from '@/lib/supabase'
 export async function GET() {
   try {
     const clients = await executeWithRetry(async (supabase) => {
-      // Récupérer tous les clients avec un tri
+      // Récupérer tous les clients avec un tri, incluant reviews_disabled
       const { data: clientsData, error: clientsError } = await supabase
         .from('clients')
-        .select('*')
+        .select('*, reviews_disabled')
         .order('nom', { ascending: true })
         .order('prenom', { ascending: true })
 
@@ -84,7 +84,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { nom, prenom, telephone, email, adresses } = body
+    const { nom, prenom, telephone, email, adresses, reviews_disabled } = body
 
     const client = await executeWithRetry(async (supabase) => {
       const { data, error } = await supabase
@@ -95,6 +95,7 @@ export async function POST(request: NextRequest) {
           telephone,
           email,
           adresses: adresses || null,
+          reviews_disabled: reviews_disabled || false,
         })
         .select()
         .single()

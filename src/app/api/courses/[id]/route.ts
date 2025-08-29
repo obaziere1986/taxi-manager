@@ -96,6 +96,127 @@ export async function PUT(
         throw updateError
       }
 
+      // Trigger des emails clients selon les changements de statut
+      if (updateData.statut && updateData.statut !== existingCourse.statut) {
+        console.log(`📧 Changement de statut: ${existingCourse.statut} → ${updateData.statut}`)
+        
+        // Course terminée → Vérifier si avis activé avant de créer entrée avis + envoyer email
+        if (updateData.statut === 'TERMINEE' && updatedCourse.clients?.email && updatedCourse.users) {
+          try {
+            // Vérifier les paramètres globaux d'avis
+            const { data: companySettings } = await supabase
+              .from('company_settings')
+              .select('reviews_enabled, reviews_auto_send')
+              .single()
+            
+            // Vérifier si le client a désactivé les avis
+            const { data: clientSettings } = await supabase
+              .from('clients')
+              .select('reviews_disabled')
+              .eq('id', updatedCourse.client_id)
+              .single()
+            
+            const reviewsGloballyEnabled = companySettings?.reviews_enabled !== false
+            const reviewsAutoSendEnabled = companySettings?.reviews_auto_send !== false
+            const clientOptedOut = clientSettings?.reviews_disabled === true
+            
+            console.log(`🔧 Paramètres avis: global=${reviewsGloballyEnabled}, auto=${reviewsAutoSendEnabled}, client_opt_out=${clientOptedOut}`)
+            
+            // Procéder seulement si tout est activé et client n'a pas refusé
+            if (reviewsGloballyEnabled && reviewsAutoSendEnabled && !clientOptedOut) {
+              // Générer un token unique pour l'avis
+              const reviewToken = `review_${id}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+              
+              // Créer l'entrée dans avis_clients
+              const { error: reviewError } = await supabase
+                .from('avis_clients')
+                .insert({
+                  course_id: id,
+                  client_id: updatedCourse.client_id,
+                  review_token: reviewToken,
+                  email_sent_at: new Date().toISOString(),
+                  created_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString()
+                })
+              
+              if (reviewError) {
+                console.error('Erreur création avis client:', reviewError)
+              } else {
+                console.log('✅ Envoi email d\'avis automatique activé')
+                // Envoyer l'email de fin de course avec lien avis
+              fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/mail/send`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  type: 'client_course_completed_with_review',
+                  to: updatedCourse.clients.email,
+                  variables: {
+                    client: {
+                      nom: updatedCourse.clients.nom,
+                      prenom: updatedCourse.clients.prenom
+                    },
+                    course: {
+                      id: updatedCourse.id,
+                      origine: updatedCourse.origine,
+                      destination: updatedCourse.destination,
+                      dateHeure: updatedCourse.date_heure,
+                      prix: updatedCourse.prix
+                    },
+                    user: {
+                      nom: updatedCourse.users.nom,
+                      prenom: updatedCourse.users.prenom
+                    },
+                    reviewToken
+                  }
+                })
+              }).catch(err => console.error('Erreur envoi email course terminée:', err))
+              }
+            } else {
+              console.log('🚫 Envoi d\'avis désactivé:', {
+                global: reviewsGloballyEnabled,
+                auto: reviewsAutoSendEnabled,
+                clientOptOut: clientOptedOut
+              })
+            }
+          } catch (error) {
+            console.error('Erreur automation avis client:', error)
+          }
+        }
+      }
+      
+      // Trigger email d'assignation si chauffeur assigné
+      if (userId !== undefined && userId !== existingCourse.user_id && userId && updatedCourse.users && updatedCourse.clients?.email) {
+        try {
+          fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/mail/send`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              type: 'client_driver_assigned',
+              to: updatedCourse.clients.email,
+              variables: {
+                client: {
+                  nom: updatedCourse.clients.nom,
+                  prenom: updatedCourse.clients.prenom
+                },
+                course: {
+                  id: updatedCourse.id,
+                  origine: updatedCourse.origine,
+                  destination: updatedCourse.destination,
+                  dateHeure: updatedCourse.date_heure
+                },
+                user: {
+                  nom: updatedCourse.users.nom,
+                  prenom: updatedCourse.users.prenom,
+                  telephone: updatedCourse.users.telephone
+                }
+              }
+            })
+          }).catch(err => console.error('Erreur envoi email assignation:', err))
+        } catch (error) {
+          console.error('Erreur automation email assignation:', error)
+        }
+      }
+
       return updatedCourse
     })
 

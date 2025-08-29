@@ -1,19 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { executeWithRetry } from '@/lib/supabase'
+import { sendWelcomeEmail } from '@/lib/mail-hooks'
 
 // GET - Récupérer tous les utilisateurs (remplace l'ancienne API chauffeurs)
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const role = searchParams.get('role') // Filtre optionnel par rôle
+    const inactive = searchParams.get('inactive') // Filtre pour récupérer les inactifs
     
     const users = await executeWithRetry(async (supabase) => {
       let query = supabase
         .from('users')
         .select('*')
-        .eq('actif', true)  // Ne récupérer que les utilisateurs actifs
         .order('nom', { ascending: true })
         .order('prenom', { ascending: true })
+
+      // Filtrer selon le statut actif/inactif
+      if (inactive === 'true') {
+        query = query.eq('actif', false)  // Utilisateurs inactifs uniquement
+      } else {
+        query = query.eq('actif', true)   // Utilisateurs actifs uniquement (par défaut)
+      }
       
       // Appliquer le filtre par rôle si spécifié
       if (role) {
@@ -126,6 +134,20 @@ export async function POST(request: NextRequest) {
         }
       }
     })
+
+    // Envoyer l'email de bienvenue en arrière-plan
+    try {
+      await sendWelcomeEmail({
+        nom: user.nom,
+        prenom: user.prenom,
+        email: user.email,
+        role: user.role
+      });
+      console.log(`✅ Email de bienvenue envoyé à ${user.prenom} ${user.nom}`);
+    } catch (emailError) {
+      console.error(`❌ Erreur lors de l'envoi de l'email de bienvenue:`, emailError);
+      // On ne fait pas échouer la création utilisateur si l'email échoue
+    }
 
     return NextResponse.json(user, { status: 201 })
   } catch (error) {

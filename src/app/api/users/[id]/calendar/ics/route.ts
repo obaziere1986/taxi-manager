@@ -87,7 +87,7 @@ function generateICS(courses: any[], user: any): string {
   const now = new Date()
   const prodId = `-//TaxiManager//Planning ${user.prenom} ${user.nom}//FR`
   
-  let ics = [
+  const ics = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
     `PRODID:${prodId}`,

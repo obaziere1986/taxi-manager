@@ -1,6 +1,6 @@
 # 🚕 Taxi Manager
 
-**Système de gestion de taxi professionnel** développé avec Next.js 15, TypeScript et SQLite.
+**Système de gestion de taxi professionnel** développé avec Next.js 15, TypeScript et Supabase PostgreSQL.
 
 ## ✨ Fonctionnalités
 
@@ -8,42 +8,66 @@
 - 👥 **Gestion clients & utilisateurs** avec noms d'acteurs français célèbres
 - 🚙 **Gestion véhicules** complète avec assignations et historique  
 - 🔗 **Système d'assignation** véhicules ↔ utilisateurs en temps réel
-- 📅 **Planning drag-and-drop** avec courses sur 5 semaines
+- 📅 **Planning drag-and-drop** avec courses sur 6 mois
 - ⚙️ **Page paramètres** pour gestion complète du parc et des effectifs
 - 💰 **Suivi des revenus** et KPIs business (30 derniers jours)
 - 🎬 **Noms d'acteurs français** de toutes générations pour plus d'authenticité
 - 🇫🇷 **Interface entièrement en français** avec dates complètes
+- 🔒 **Sécurité avancée** avec Row Level Security (RLS)
 
 ## 🚀 Démarrage Rapide
+
+### Prérequis
+- Node.js 18+ ou 20+
+- pnpm (gestionnaire de packages)
+- Compte Supabase
+
+### Configuration
 
 ```bash
 # Installation des dépendances
 pnpm install
 
-# Configuration de la base de données
-pnpm exec prisma db push
-pnpm run db:seed
+# Configuration des variables d'environnement
+cp .env.example .env.local
+# Complétez avec vos clés Supabase
+```
 
-# Lancement du serveur de développement  
+Variables d'environnement requises dans `.env.local` :
+```env
+# Supabase
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+
+# NextAuth
+NEXTAUTH_SECRET=your-nextauth-secret
+NEXTAUTH_URL=http://localhost:3000
+```
+
+### Lancement
+
+```bash
+# Serveur de développement  
 pnpm dev
 ```
 
 Ouvrir [http://localhost:3000](http://localhost:3000) dans votre navigateur.
 
 ### 🎬 Données de démonstration
-Le script de seeding génère automatiquement :
+La base Supabase contient automatiquement :
 - **10 utilisateurs** avec des noms d'acteurs français (Jean Dujardin, Marion Cotillard, etc.)
-- **10 véhicules** avec 8 assignations actives
+- **10 véhicules** avec assignations actives
 - **50 clients** avec noms d'acteurs de toutes générations
-- **~550 courses** réparties sur 5 semaines (2 passées + 3 futures)
+- **295 courses réalistes** réparties sur 6 mois (3 passés + 3 futurs)
 
 ## 📚 Documentation
 
 **🔗 Pour la documentation complète, voir [CLAUDE.md](./CLAUDE.md)**
 
 Ce fichier contient :
-- Architecture détaillée
-- Guide des APIs
+- Architecture détaillée avec Supabase
+- Guide des APIs et RLS
 - Patterns de développement
 - Commandes utiles
 - Points d'attention
@@ -52,8 +76,11 @@ Ce fichier contient :
 
 - **Framework** : Next.js 15 (App Router)
 - **Language** : TypeScript
-- **Base de données** : SQLite + Prisma ORM
-- **UI** : Tailwind CSS + shadcn/ui
+- **Base de données** : PostgreSQL via Supabase
+- **ORM/Client** : Client Supabase officiel
+- **Sécurité** : Row Level Security (RLS)
+- **Auth** : NextAuth.js + Supabase Adapter
+- **UI** : Tailwind CSS v4 + shadcn/ui
 - **Graphiques** : Recharts
 - **Drag & Drop** : @dnd-kit
 - **Package Manager** : pnpm
@@ -67,9 +94,10 @@ pnpm start        # Serveur de production
 pnpm lint         # Analyse ESLint
 pnpm dev:restart  # Redémarrage forcé
 
-# Base de données
-pnpm run db:seed  # Données de test
-pnpm run db:reset # Reset + seeding
+# Supabase
+pnpm supabase:types  # Génération des types TypeScript
+pnpm supabase:reset  # Reset via interface Supabase
+pnpm supabase:seed   # Seeding via interface Supabase
 ```
 
 ## 🏗️ Structure du Projet
@@ -78,7 +106,7 @@ pnpm run db:reset # Reset + seeding
 taxi-manager/
 ├── src/
 │   ├── app/                 # Pages Next.js (App Router)
-│   │   ├── api/            # APIs REST (clients, users, véhicules, courses)
+│   │   ├── api/            # APIs REST sécurisées (clients, users, véhicules, courses)
 │   │   ├── parametres/     # Page gestion utilisateurs/véhicules
 │   │   └── [pages]/        # Dashboard, planning, clients, courses
 │   ├── components/          # Composants React
@@ -86,12 +114,23 @@ taxi-manager/
 │   │   ├── dashboard/      # Analytics & graphiques (30 jours)
 │   │   ├── effectifs/      # Gestion utilisateurs/assignations
 │   │   ├── vehicules/      # Gestion véhicules complet
-│   │   └── planning/       # Drag-and-drop sur 5 semaines
-│   └── lib/                # Utilitaires + connexion DB robuste
-├── prisma/                 # Schema & base SQLite
-├── scripts/                # Seeding avec acteurs français
+│   │   └── planning/       # Drag-and-drop sur 6 mois
+│   └── lib/                # Utilitaires + client Supabase
 └── [docs]/                 # Documentation (CLAUDE.md, README.md)
 ```
+
+## 🔒 Sécurité et Authentification
+
+### Row Level Security (RLS)
+Toutes les tables sont protégées par des politiques RLS :
+- **Users** : Accès selon les rôles (Admin, Planner, Chauffeur)
+- **Courses** : Visibilité selon les permissions utilisateur
+- **Clients/Véhicules** : Accès contrôlé par organisation
+
+### Rôles utilisateur
+- **Admin** : Accès complet à toutes les fonctionnalités
+- **Planner** : Gestion du planning et assignations
+- **Chauffeur** : Vue limitée aux courses assignées
 
 ## 🎭 Spécificités Françaises
 
@@ -101,7 +140,28 @@ taxi-manager/
 - **Diversité** : Acteurs d'origines diverses du cinéma français
 - **Interface** : Dates françaises, statuts, messages en français
 
+## 🚨 Production
+
+Pour déployer en production :
+1. Créer un projet Supabase production
+2. Configurer les variables d'environnement
+3. Activer les politiques RLS
+4. Déployer sur Vercel/Netlify
+
+## 🔧 Développement
+
+### Tests
+```bash
+# Tests à implémenter
+pnpm test
+```
+
+### Debugging
+- Logs Supabase dans le dashboard
+- Console développeur pour les erreurs client
+- Variables d'environnement pour les APIs
+
 ---
 
 **Développé avec ❤️ en France** 🇫🇷  
-*Dernière mise à jour : 13 août 2025 - Version avec acteurs français*
+*Dernière mise à jour : 26 août 2025 - Version Supabase PostgreSQL*

@@ -1,0 +1,124 @@
+name: 🚀 Deploy to Production
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: 🌍 Deploy to flowcab.fr
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📂 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 📦 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: 📥 Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: 🔧 Install dependencies
+        run: pnpm install
+
+      - name: 🏗️ Build application
+        run: pnpm build
+        env:
+          NODE_ENV: production
+          NEXTAUTH_URL: https://flowcab.fr
+          NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+      - name: 📁 Create deployment archive
+        run: |
+          tar -czf taxi-manager-deploy.tar.gz \
+            --exclude=node_modules \
+            --exclude=.git \
+            --exclude=.github \
+            --exclude=.next/cache \
+            .
+
+      - name: 🔑 Setup SSH key
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: 📤 Deploy to server
+        run: |
+          # Configuration SSH
+          ssh-keyscan -H 69.62.108.105 >> ~/.ssh/known_hosts
+          
+          # Transfer de l'archive
+          scp taxi-manager-deploy.tar.gz root@69.62.108.105:~/taxi-manager-new.tar.gz
+          
+          # Déploiement sur le serveur
+          ssh root@69.62.108.105 << 'EOF'
+            set -e
+            
+            echo "🚀 Début du déploiement..."
+            
+            # Backup de l'ancienne version
+            if [ -d "/var/www/flowcab.fr" ]; then
+              cp -r /var/www/flowcab.fr /var/www/flowcab.fr.backup.$(date +%Y%m%d-%H%M%S)
+            fi
+            
+            # Création du répertoire temporaire
+            mkdir -p /var/www/flowcab.fr.new
+            cd /var/www/flowcab.fr.new
+            
+            # Extraction de la nouvelle version
+            tar -xzf ~/taxi-manager-new.tar.gz
+            
+            # Conservation des variables d'environnement
+            if [ -f "/var/www/flowcab.fr/.env.production.local" ]; then
+              cp /var/www/flowcab.fr/.env.production.local .env.production.local
+            fi
+            
+            # Installation des dépendances (production only)
+            pnpm install --production
+            
+            # Arrêt de l'ancienne version
+            pm2 stop taxi-manager || true
+            
+            # Remplacement atomique
+            if [ -d "/var/www/flowcab.fr" ]; then
+              mv /var/www/flowcab.fr /var/www/flowcab.fr.old
+            fi
+            mv /var/www/flowcab.fr.new /var/www/flowcab.fr
+            
+            # Copie de la configuration PM2
+            cd /var/www/flowcab.fr
+            if [ ! -f "ecosystem.config.js" ]; then
+              cp ~/ecosystem.config.js .
+            fi
+            
+            # Relancement de l'application
+            pm2 start ecosystem.config.js || pm2 restart taxi-manager
+            pm2 save
+            
+            # Nettoyage
+            rm -f ~/taxi-manager-new.tar.gz
+            rm -rf /var/www/flowcab.fr.old
+            
+            echo "✅ Déploiement terminé avec succès!"
+          EOF
+
+      - name: 🧪 Test deployment
+        run: |
+          sleep 10
+          curl -f -L -I http://flowcab.fr || exit 1
+          echo "✅ Application accessible sur flowcab.fr"
+
+      - name: 📧 Notify on failure
+        if: failure()
+        run: |
+          echo "❌ Déploiement échoué - vérifiez les logs"

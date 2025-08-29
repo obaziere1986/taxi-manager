@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { executeWithRetry } from '@/lib/supabase'
+import { sendCourseAssignmentEmail, scheduleReminders } from '@/lib/mail-hooks'
 
 export async function PUT(
   request: NextRequest,
@@ -83,6 +84,57 @@ export async function PUT(
 
       return updatedCourse
     })
+
+    // Envoyer les notifications par email si la course est assignée à un chauffeur
+    if (userId && course.users && course.users.email) {
+      try {
+        // Notification d'assignation
+        await sendCourseAssignmentEmail(
+          {
+            nom: course.users.nom,
+            prenom: course.users.prenom,
+            email: course.users.email
+          },
+          {
+            id: course.id,
+            origine: course.origine,
+            destination: course.destination,
+            dateHeure: new Date(course.date_heure).toLocaleString('fr-FR'),
+            prix: course.prix,
+            client: course.clients ? {
+              nom: course.clients.nom,
+              prenom: course.clients.prenom,
+              telephone: course.clients.telephone
+            } : undefined
+          }
+        );
+
+        // Programmer les rappels automatiques
+        await scheduleReminders(
+          {
+            nom: course.users.nom,
+            prenom: course.users.prenom,
+            email: course.users.email
+          },
+          {
+            id: course.id,
+            origine: course.origine,
+            destination: course.destination,
+            dateHeure: course.date_heure,
+            client: course.clients ? {
+              nom: course.clients.nom,
+              prenom: course.clients.prenom,
+              telephone: course.clients.telephone
+            } : undefined
+          }
+        );
+
+        console.log(`✅ Notifications email programmées pour la course ${course.id}`);
+      } catch (emailError) {
+        console.error(`❌ Erreur lors de l'envoi des notifications:`, emailError);
+        // On ne fait pas échouer l'assignation si l'email échoue
+      }
+    }
 
     return NextResponse.json(course)
   } catch (error) {
