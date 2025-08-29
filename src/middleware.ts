@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { getToken } from 'next-auth/jwt'
 
 const publicRoutes = ['/login', '/api/auth', '/api/settings/debug', '/api/debug-auth', '/api/debug-nextauth', '/api/simple-login']
 
@@ -26,11 +25,23 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next()
   }
   
-  // Vérifier l'authentification pour toutes les autres routes
-  const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET })
+  // Vérifier l'authentification JWT pour toutes les autres routes
+  const authToken = request.cookies.get('auth-token')?.value
   
-  if (!token) {
+  if (!authToken) {
     // Rediriger vers la page de connexion si non authentifié
+    const loginUrl = new URL('/login', request.url)
+    loginUrl.searchParams.set('callbackUrl', pathname)
+    return NextResponse.redirect(loginUrl)
+  }
+  
+  // Vérifier la validité du token JWT
+  try {
+    const jwt = require('jsonwebtoken')
+    jwt.verify(authToken, process.env.NEXTAUTH_SECRET || 'fallback-secret')
+  } catch (error) {
+    // Token invalide, rediriger vers login
+    console.error('Token JWT invalide:', error)
     const loginUrl = new URL('/login', request.url)
     loginUrl.searchParams.set('callbackUrl', pathname)
     return NextResponse.redirect(loginUrl)
