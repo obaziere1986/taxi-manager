@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from 'react'
-import { signIn, getSession } from 'next-auth/react'
+// import { signIn, getSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -24,23 +24,25 @@ export default function LoginPage() {
     setError('')
 
     try {
-      const result = await signIn('credentials', {
-        login: formData.login,
-        password: formData.password,
-        redirect: false
+      const response = await fetch('/api/simple-login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          email: formData.login,
+          password: formData.password
+        })
       })
 
-      if (result?.error && result.error !== 'undefined') {
-        setError('Identifiants incorrects. Veuillez réessayer.')
+      const result = await response.json()
+
+      if (result.success) {
+        // Connexion réussie, rediriger vers dashboard
+        router.push('/')
+        router.refresh()
       } else {
-        // Vérifier la session et rediriger
-        const session = await getSession()
-        if (session) {
-          router.push('/')
-          router.refresh()
-        } else {
-          setError('Erreur de session. Veuillez réessayer.')
-        }
+        setError(result.message || 'Identifiants incorrects. Veuillez réessayer.')
       }
     } catch (error) {
       console.error('Erreur de connexion:', error)
