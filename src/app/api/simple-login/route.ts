@@ -101,6 +101,7 @@ export async function POST(request: NextRequest) {
       })
     } else {
       // Formulaire HTML: rediriger vers dashboard
+      console.log('🔀 REDIRECTION HTML vers dashboard')
       response = NextResponse.redirect(new URL('/', request.url))
     }
 
