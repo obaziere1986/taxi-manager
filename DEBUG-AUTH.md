@@ -78,9 +78,13 @@ Le cookie `auth-token` n'est pas correctement défini ou lu en production :
 - **PM2 :** taxi-manager process
 - **Commit debug :** 34dd38c
 
+## Fix appliqués
+- **Port 3001 :** App configurée sur port 3001 (package.json)
+- **Redémarrage :** Résolu conflit port 3000
+
 ## Prochaines étapes
-1. Tester connexion prod
+1. Tester connexion prod sur port 3001
 2. Analyser logs
-3. Identifier cause exacte
+3. Identifier cause exacte cookie
 4. Fix définitif
 5. Nettoyage code
