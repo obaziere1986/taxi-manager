@@ -32,11 +32,23 @@ jobs:
 
       - name: 📁 Create deployment archive
         run: |
+          # Attendre que tous les processus se terminent
+          sleep 3
+          
+          # Nettoyer les fichiers temporaires potentiels
+          find . -name "*.tmp" -delete 2>/dev/null || true
+          find . -name ".DS_Store" -delete 2>/dev/null || true
+          
+          # Créer l'archive avec options tolérantes aux changements
           tar -czf taxi-manager-deploy.tar.gz \
             --exclude=node_modules \
             --exclude=.git \
             --exclude=.github \
             --exclude=.next \
+            --exclude="*.tmp" \
+            --exclude="*.log" \
+            --warning=no-file-changed \
+            --warning=no-file-removed \
             .
 
       - name: 🔑 Setup SSH key
