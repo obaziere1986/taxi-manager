@@ -69,45 +69,37 @@ export default function LoginPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4" suppressHydrationWarning>
+          {/* TEST HTML BRUT - Temporaire pour diagnostic */}
+          <form action="/api/simple-login" method="POST" className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="login">Login ou Email</Label>
-              <Input
-                id="login"
-                name="login"
+              <label htmlFor="email" className="text-sm font-medium">Login ou Email</label>
+              <input
+                id="email"
+                name="email"
                 type="text"
-                placeholder="Votre login ou email"
-                value={formData.login}
-                onChange={handleChange}
+                placeholder="jean.dujardin@taxicompany.fr"
+                className="flex h-9 w-full rounded-md border border-gray-300 bg-white px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-gray-400"
                 required
-                disabled={loading}
-                suppressHydrationWarning
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">Mot de passe</Label>
-              <Input
+              <label htmlFor="password" className="text-sm font-medium">Mot de passe</label>
+              <input
                 id="password"
                 name="password"
                 type="password"
-                placeholder="Votre mot de passe"
-                value={formData.password}
-                onChange={handleChange}
+                placeholder="password123"
+                className="flex h-9 w-full rounded-md border border-gray-300 bg-white px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-gray-400"
                 required
-                disabled={loading}
-                suppressHydrationWarning
               />
             </div>
             
-            {error && (
-              <Alert variant="destructive">
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
-            
-            <Button type="submit" className="w-full" disabled={loading} suppressHydrationWarning>
-              {loading ? 'Connexion...' : 'Se connecter'}
-            </Button>
+            <button 
+              type="submit" 
+              className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-gray-400 disabled:pointer-events-none disabled:opacity-50 bg-gray-900 text-gray-50 shadow hover:bg-gray-900/90 h-9 px-4 py-2 w-full"
+            >
+              Se connecter (TEST HTML)
+            </button>
           </form>
           
           {process.env.NODE_ENV === 'development' && (
