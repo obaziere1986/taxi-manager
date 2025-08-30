@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server";
 
 // Routes publiques selon l'environnement
 const basePublicRoutes = ['/login', '/api/current-user', '/api/logout', '/api/health', '/health', '/avis', '/api/avis/submit']
-const devOnlyRoutes = ['/api/settings/debug', '/api/debug-auth', '/api/debug-nextauth', '/api/clear-cookies', '/api/test-auth']
+const devOnlyRoutes = ['/api/settings/debug', '/api/debug-auth', '/api/debug-nextauth', '/api/clear-cookies', '/api/test-auth', '/api/debug-session']
 
 const publicRoutes = process.env.NODE_ENV === 'development' 
   ? [...basePublicRoutes, ...devOnlyRoutes]
