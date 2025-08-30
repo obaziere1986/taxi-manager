@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-const publicRoutes = ['/login', '/api/auth', '/api/settings/debug', '/api/debug-auth', '/api/debug-nextauth', '/api/simple-login']
+const publicRoutes = ['/login', '/api/auth', '/api/settings/debug', '/api/debug-auth', '/api/debug-nextauth', '/api/simple-login', '/api/health', '/health']
 
 export async function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl
+  try {
+    const { pathname } = request.nextUrl
   
   // Permettre l'accès aux routes publiques et aux APIs d'auth
   if (publicRoutes.some(route => pathname.startsWith(route))) {
@@ -62,6 +63,11 @@ export async function middleware(request: NextRequest) {
   response.headers.set('X-Content-Type-Options', 'nosniff')
 
   return response;
+  } catch (error) {
+    // En cas d'erreur dans le middleware, laisser passer la requête
+    console.error('Erreur middleware:', error)
+    return NextResponse.next()
+  }
 }
 
 export const config = {
