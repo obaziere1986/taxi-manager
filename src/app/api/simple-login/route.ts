@@ -86,16 +86,23 @@ export async function POST(request: NextRequest) {
       .eq('id', user.id)
 
     // Créer la réponse avec cookie
-    const response = NextResponse.json({
-      success: true,
-      message: 'Connexion réussie',
-      user: {
-        id: user.id,
-        email: user.email,
-        name: `${user.prenom} ${user.nom}`,
-        role: user.role
-      }
-    })
+    let response
+    if (contentType?.includes('application/json')) {
+      // Appel fetch React: renvoyer JSON
+      response = NextResponse.json({
+        success: true,
+        message: 'Connexion réussie',
+        user: {
+          id: user.id,
+          email: user.email,
+          name: `${user.prenom} ${user.nom}`,
+          role: user.role
+        }
+      })
+    } else {
+      // Formulaire HTML: rediriger vers dashboard
+      response = NextResponse.redirect(new URL('/', request.url))
+    }
 
     // Définir le cookie d'authentification
     const cookieOptions = {
