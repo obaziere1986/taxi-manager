@@ -39,8 +39,8 @@ export default function LoginPage() {
 
       if (result.success) {
         // Connexion réussie, forcer un reload complet pour que le middleware voie le cookie
-        alert('✅ Connexion réussie, redirection...')
-        window.location.href = '/'
+        console.log('✅ Connexion réussie, redirection vers /', window.location.origin)
+        window.location.replace('/')
       } else {
         setError(result.message || 'Identifiants incorrects. Veuillez réessayer.')
       }

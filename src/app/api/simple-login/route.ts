@@ -4,6 +4,7 @@ import { SignJWT } from 'jose'
 import { getSupabaseClient } from "@/lib/supabase"
 
 export async function POST(request: NextRequest) {
+  console.log('📡 API LOGIN - Tentative connexion')
   try {
     const { email, password } = await request.json()
 
