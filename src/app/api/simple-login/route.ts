@@ -111,7 +111,8 @@ export async function POST(request: NextRequest) {
     console.error('❌ Erreur login simple:', error)
     return NextResponse.json({ 
       success: false, 
-      message: 'Erreur serveur' 
+      message: `Erreur serveur: ${error instanceof Error ? error.message : 'Erreur inconnue'}`,
+      error: error instanceof Error ? error.stack : String(error)
     }, { status: 500 })
   }
 }
