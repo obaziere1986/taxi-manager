@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
     // Définir le cookie d'authentification
     response.cookies.set('auth-token', token, {
       httpOnly: true,
-      secure: false, // Temporaire: permettre HTTP pour test
+      secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       maxAge: 86400 // 24h
     })
