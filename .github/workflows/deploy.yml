@@ -51,14 +51,12 @@ jobs:
           scp taxi-manager-deploy.tar.gz root@69.62.108.105:~/taxi-manager-new.tar.gz
           
           # Création du fichier env temporaire
-          cat > temp_env.txt << 'EOF'
-NODE_ENV=production
-NEXTAUTH_URL=https://app.flowcab.fr
-NEXTAUTH_SECRET=${{ secrets.NEXTAUTH_SECRET }}
-NEXT_PUBLIC_SUPABASE_URL=${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-EOF
+          echo "NODE_ENV=production" > temp_env.txt
+          echo "NEXTAUTH_URL=https://app.flowcab.fr" >> temp_env.txt
+          echo "NEXTAUTH_SECRET=${{ secrets.NEXTAUTH_SECRET }}" >> temp_env.txt
+          echo "NEXT_PUBLIC_SUPABASE_URL=${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}" >> temp_env.txt
+          echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}" >> temp_env.txt
+          echo "SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" >> temp_env.txt
           
           # Transfer du fichier env
           scp temp_env.txt root@69.62.108.105:~/temp_env.txt
