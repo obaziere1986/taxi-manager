@@ -68,10 +68,15 @@ jobs:
             # Extraction de la nouvelle version
             tar -xzf ~/taxi-manager-new.tar.gz --strip-components=1
             
-            # Conservation des variables d'environnement
-            if [ -f "/var/www/app.flowcab.fr/.env.production.local" ]; then
-              cp /var/www/app.flowcab.fr/.env.production.local .env.production.local
-            fi
+            # Création des variables d'environnement production
+            cat > .env.production.local << 'ENV_EOF'
+NODE_ENV=production
+NEXTAUTH_URL=https://app.flowcab.fr
+NEXTAUTH_SECRET=${{ secrets.NEXTAUTH_SECRET }}
+NEXT_PUBLIC_SUPABASE_URL=${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+ENV_EOF
             
             # Installation de toutes les dépendances
             pnpm install
