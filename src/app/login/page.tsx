@@ -69,8 +69,8 @@ export default function LoginPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {/* TEST HTML BRUT - Temporaire pour diagnostic */}
-          <form action="/api/simple-login" method="POST" className="space-y-4">
+          {/* TEST HTML avec JavaScript - Solution finale */}
+          <form id="loginForm" className="space-y-4">
             <div className="space-y-2">
               <label htmlFor="email" className="text-sm font-medium">Login ou Email</label>
               <input
@@ -94,13 +94,57 @@ export default function LoginPage() {
               />
             </div>
             
+            <div id="error" className="text-red-600 text-sm hidden"></div>
+            
             <button 
               type="submit" 
+              id="submitBtn"
               className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-gray-400 disabled:pointer-events-none disabled:opacity-50 bg-gray-900 text-gray-50 shadow hover:bg-gray-900/90 h-9 px-4 py-2 w-full"
             >
-              Se connecter (TEST HTML)
+              Se connecter
             </button>
           </form>
+
+          <script dangerouslySetInnerHTML={{
+            __html: `
+              document.getElementById('loginForm').onsubmit = async function(e) {
+                e.preventDefault();
+                const btn = document.getElementById('submitBtn');
+                const error = document.getElementById('error');
+                
+                btn.textContent = 'Connexion...';
+                btn.disabled = true;
+                error.classList.add('hidden');
+                
+                try {
+                  const response = await fetch('/api/simple-login', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                      email: document.getElementById('email').value,
+                      password: document.getElementById('password').value
+                    })
+                  });
+                  
+                  const result = await response.json();
+                  
+                  if (result.success) {
+                    window.location.href = '/';
+                  } else {
+                    error.textContent = result.message;
+                    error.classList.remove('hidden');
+                    btn.textContent = 'Se connecter';
+                    btn.disabled = false;
+                  }
+                } catch (err) {
+                  error.textContent = 'Erreur de connexion';
+                  error.classList.remove('hidden');
+                  btn.textContent = 'Se connecter';
+                  btn.disabled = false;
+                }
+              }
+            `
+          }} />
           
           {process.env.NODE_ENV === 'development' && (
             <div className="mt-6 text-center text-sm text-gray-600">
