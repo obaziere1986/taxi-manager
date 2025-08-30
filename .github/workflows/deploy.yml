@@ -32,21 +32,10 @@ jobs:
 
       - name: 📁 Create deployment archive
         run: |
-          # Attendre que tous les processus se terminent
-          sleep 3
-          
-          # Nettoyer les fichiers temporaires potentiels
-          find . -name "*.tmp" -delete 2>/dev/null || true
-          find . -name ".DS_Store" -delete 2>/dev/null || true
-          
-          # Créer l'archive en excluant l'archive elle-même (cause racine du conflit)
-          tar -czf taxi-manager-deploy.tar.gz \
-            --exclude=node_modules \
-            --exclude=.git \
-            --exclude=.github \
-            --exclude=.next \
-            --exclude=taxi-manager-deploy.tar.gz \
-            .
+          # Utilisation de git archive pour éviter complètement les conflits tar
+          # Ne prend que les fichiers suivis par git, aucun conflit possible
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git archive --format=tar HEAD | gzip > taxi-manager-deploy.tar.gz
 
       - name: 🔑 Setup SSH key
         uses: webfactory/ssh-agent@v0.9.0
