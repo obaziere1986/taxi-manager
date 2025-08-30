@@ -69,7 +69,6 @@ export default function LoginPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {/* TEST HTML avec JavaScript - Solution finale */}
           <form id="loginForm" className="space-y-4">
             <div className="space-y-2">
               <label htmlFor="email" className="text-sm font-medium">Login ou Email</label>
@@ -107,42 +106,47 @@ export default function LoginPage() {
 
           <script dangerouslySetInnerHTML={{
             __html: `
-              document.getElementById('loginForm').onsubmit = async function(e) {
-                e.preventDefault();
-                const btn = document.getElementById('submitBtn');
-                const error = document.getElementById('error');
-                
-                btn.textContent = 'Connexion...';
-                btn.disabled = true;
-                error.classList.add('hidden');
-                
-                try {
-                  const response = await fetch('/api/simple-login', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                      email: document.getElementById('email').value,
-                      password: document.getElementById('password').value
-                    })
+              window.addEventListener('load', function() {
+                const form = document.getElementById('loginForm');
+                if (form) {
+                  form.addEventListener('submit', async function(e) {
+                    e.preventDefault();
+                    const btn = document.getElementById('submitBtn');
+                    const error = document.getElementById('error');
+                    
+                    btn.textContent = 'Connexion...';
+                    btn.disabled = true;
+                    error.style.display = 'none';
+                    
+                    try {
+                      const response = await fetch('/api/simple-login', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({
+                          email: document.getElementById('email').value,
+                          password: document.getElementById('password').value
+                        })
+                      });
+                      
+                      const result = await response.json();
+                      
+                      if (result.success) {
+                        window.location.href = '/';
+                      } else {
+                        error.textContent = result.message;
+                        error.style.display = 'block';
+                        btn.textContent = 'Se connecter';
+                        btn.disabled = false;
+                      }
+                    } catch (err) {
+                      error.textContent = 'Erreur de connexion';
+                      error.style.display = 'block';
+                      btn.textContent = 'Se connecter';
+                      btn.disabled = false;
+                    }
                   });
-                  
-                  const result = await response.json();
-                  
-                  if (result.success) {
-                    window.location.href = '/';
-                  } else {
-                    error.textContent = result.message;
-                    error.classList.remove('hidden');
-                    btn.textContent = 'Se connecter';
-                    btn.disabled = false;
-                  }
-                } catch (err) {
-                  error.textContent = 'Erreur de connexion';
-                  error.classList.remove('hidden');
-                  btn.textContent = 'Se connecter';
-                  btn.disabled = false;
                 }
-              }
+              });
             `
           }} />
           

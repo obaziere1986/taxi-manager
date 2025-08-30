@@ -40,7 +40,7 @@ export async function middleware(request: NextRequest) {
   
   if (!authToken) {
     // Rediriger vers la page de connexion si non authentifié
-    const loginUrl = new URL('/login-simple', request.url)
+    const loginUrl = new URL('/login', request.url)
     return NextResponse.redirect(loginUrl)
   }
   
