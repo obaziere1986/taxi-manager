@@ -43,11 +43,6 @@ jobs:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
       - name: 📤 Deploy to server
-        env:
-          NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           # Configuration SSH
           ssh-keyscan -H 69.62.108.105 >> ~/.ssh/known_hosts
@@ -55,14 +50,29 @@ jobs:
           # Transfer de l'archive
           scp taxi-manager-deploy.tar.gz root@69.62.108.105:~/taxi-manager-new.tar.gz
           
-          # Déploiement sur le serveur avec variables d'environnement
-          ssh root@69.62.108.105 "
+          # Création du fichier env temporaire
+          cat > temp_env.txt << 'EOF'
+NODE_ENV=production
+NEXTAUTH_URL=https://app.flowcab.fr
+NEXTAUTH_SECRET=${{ secrets.NEXTAUTH_SECRET }}
+NEXT_PUBLIC_SUPABASE_URL=${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+EOF
+          
+          # Transfer du fichier env
+          scp temp_env.txt root@69.62.108.105:~/temp_env.txt
+          rm temp_env.txt
+          
+          # Déploiement sur le serveur
+          ssh root@69.62.108.105 << 'EOF'
             set -e
-            echo '🚀 Début du déploiement...'
+            
+            echo "🚀 Début du déploiement..."
             
             # Backup de l'ancienne version
-            if [ -d '/var/www/app.flowcab.fr' ]; then
-              cp -r /var/www/app.flowcab.fr /var/www/app.flowcab.fr.backup.\$(date +%Y%m%d-%H%M%S)
+            if [ -d "/var/www/app.flowcab.fr" ]; then
+              cp -r /var/www/app.flowcab.fr /var/www/app.flowcab.fr.backup.$(date +%Y%m%d-%H%M%S)
             fi
             
             # Création du répertoire temporaire
@@ -72,15 +82,9 @@ jobs:
             # Extraction de la nouvelle version
             tar -xzf ~/taxi-manager-new.tar.gz --strip-components=1
             
-            # Création des variables d'environnement production
-            cat > .env.production.local << 'ENVEOF'
-NODE_ENV=production
-NEXTAUTH_URL=https://app.flowcab.fr
-NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
-NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
-NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
-SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
-ENVEOF"
+            # Copie des variables d'environnement
+            cp ~/temp_env.txt .env.production.local
+            rm ~/temp_env.txt
             
             # Installation de toutes les dépendances
             pnpm install
