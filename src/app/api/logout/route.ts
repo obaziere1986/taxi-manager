@@ -8,13 +8,34 @@ export async function POST() {
       message: 'Déconnexion réussie'
     })
 
-    // Supprimer le cookie d'authentification
-    response.cookies.set('auth-token', '', {
+    // Supprimer tous les cookies d'authentification
+    const cookieOptions = {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 0 // Expire immédiatement
+      sameSite: 'lax' as const,
+      maxAge: 0, // Expire immédiatement
+      path: '/'
+    }
+
+    // Cookies NextAuth
+    response.cookies.set('next-auth.session-token', '', cookieOptions)
+    response.cookies.set('__Secure-next-auth.session-token', '', {
+      ...cookieOptions,
+      secure: true
     })
+    response.cookies.set('next-auth.callback-url', '', cookieOptions)
+    response.cookies.set('next-auth.csrf-token', '', cookieOptions)
+    response.cookies.set('__Secure-next-auth.callback-url', '', {
+      ...cookieOptions,
+      secure: true
+    })
+    response.cookies.set('__Secure-next-auth.csrf-token', '', {
+      ...cookieOptions,
+      secure: true
+    })
+    
+    // Cookie JWT legacy (au cas où)
+    response.cookies.set('auth-token', '', cookieOptions)
 
     return response
 

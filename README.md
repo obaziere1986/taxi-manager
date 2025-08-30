@@ -140,13 +140,28 @@ Toutes les tables sont protégées par des politiques RLS :
 - **Diversité** : Acteurs d'origines diverses du cinéma français
 - **Interface** : Dates françaises, statuts, messages en français
 
-## 🚨 Production
+## 🚨 Production & Déploiement
 
-Pour déployer en production :
-1. Créer un projet Supabase production
-2. Configurer les variables d'environnement
-3. Activer les politiques RLS
-4. Déployer sur Vercel/Netlify
+### Configuration GitHub Actions
+Le projet utilise GitHub Actions pour le déploiement automatique sur VPS.
+
+**Secrets GitHub requis** (Settings > Secrets and Variables > Actions) :
+- `SSH_PRIVATE_KEY` : Clé privée SSH pour connexion VPS
+- `NEXTAUTH_SECRET` : Secret NextAuth généré
+- `NEXT_PUBLIC_SUPABASE_URL` : URL du projet Supabase
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY` : Clé anonyme Supabase
+- `SUPABASE_SERVICE_ROLE_KEY` : Clé service Supabase
+
+**Workflow automatisé** :
+- Déclenchement sur push `main` ou manuel
+- Build sécurisé avec variables d'environnement
+- Déploiement zéro-downtime avec backup automatique
+- Test post-déploiement automatique
+- Rollback en cas d'échec
+
+**Surveillance** :
+- Logs détaillés dans Actions tab
+- Test de santé : `curl -f -L -I https://app.flowcab.fr`
 
 ## 🔧 Développement
 

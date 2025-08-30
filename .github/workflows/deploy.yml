@@ -28,18 +28,7 @@ jobs:
       - name: 🔧 Install dependencies
         run: pnpm install
 
-      - name: 🧹 Clean build cache
-        run: rm -rf .next
-
-      - name: 🏗️ Build application
-        run: pnpm build
-        env:
-          NODE_ENV: production
-          NEXTAUTH_URL: https://app.flowcab.fr
-          NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      # Le build sera fait côté serveur avec les variables d'environnement locales
 
       - name: 📁 Create deployment archive
         run: |
@@ -47,7 +36,7 @@ jobs:
             --exclude=node_modules \
             --exclude=.git \
             --exclude=.github \
-            --exclude=.next/cache \
+            --exclude=.next \
             .
 
       - name: 🔑 Setup SSH key
@@ -70,20 +59,20 @@ jobs:
             echo "🚀 Début du déploiement..."
             
             # Backup de l'ancienne version
-            if [ -d "/var/www/flowcab.fr" ]; then
-              cp -r /var/www/flowcab.fr /var/www/flowcab.fr.backup.$(date +%Y%m%d-%H%M%S)
+            if [ -d "/var/www/app.flowcab.fr" ]; then
+              cp -r /var/www/app.flowcab.fr /var/www/app.flowcab.fr.backup.$(date +%Y%m%d-%H%M%S)
             fi
             
             # Création du répertoire temporaire
-            mkdir -p /var/www/flowcab.fr.new
-            cd /var/www/flowcab.fr.new
+            mkdir -p /var/www/app.flowcab.fr.new
+            cd /var/www/app.flowcab.fr.new
             
             # Extraction de la nouvelle version
             tar -xzf ~/taxi-manager-new.tar.gz
             
             # Conservation des variables d'environnement
-            if [ -f "/var/www/flowcab.fr/.env.production.local" ]; then
-              cp /var/www/flowcab.fr/.env.production.local .env.production.local
+            if [ -f "/var/www/app.flowcab.fr/.env.production.local" ]; then
+              cp /var/www/app.flowcab.fr/.env.production.local .env.production.local
             fi
             
             # Installation de toutes les dépendances
@@ -102,16 +91,16 @@ jobs:
             pm2 stop taxi-manager || true
             
             # Correction des permissions avant remplacement
-            chown -R root:root /var/www/flowcab.fr.new
+            chown -R root:root /var/www/app.flowcab.fr.new
             
             # Remplacement atomique
-            if [ -d "/var/www/flowcab.fr" ]; then
-              mv /var/www/flowcab.fr /var/www/flowcab.fr.old
+            if [ -d "/var/www/app.flowcab.fr" ]; then
+              mv /var/www/app.flowcab.fr /var/www/app.flowcab.fr.old
             fi
-            mv /var/www/flowcab.fr.new /var/www/flowcab.fr
+            mv /var/www/app.flowcab.fr.new /var/www/app.flowcab.fr
             
             # Copie de la configuration PM2
-            cd /var/www/flowcab.fr
+            cd /var/www/app.flowcab.fr
             if [ ! -f "ecosystem.config.js" ]; then
               cp ~/ecosystem.config.js .
             fi
@@ -122,7 +111,7 @@ jobs:
             
             # Nettoyage
             rm -f ~/taxi-manager-new.tar.gz
-            rm -rf /var/www/flowcab.fr.old
+            rm -rf /var/www/app.flowcab.fr.old
             
             echo "✅ Déploiement terminé avec succès!"
           EOF

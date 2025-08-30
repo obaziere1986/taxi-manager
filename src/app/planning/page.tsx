@@ -231,6 +231,7 @@ export default function PlanningPage() {
   const { settings } = useSettings()
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [courses, setCourses] = useState<Course[]>([])
+  const [allCourses, setAllCourses] = useState<Course[]>([]) // Toutes les courses chargées
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [activeId, setActiveId] = useState<string | null>(null)
@@ -292,12 +293,40 @@ export default function PlanningPage() {
     })
   )
 
+  // Charger les données 1 seule fois
   useEffect(() => {
     if (session) {
       fetchData()
       fetchClients()
     }
-  }, [selectedDate, session])
+  }, [session])
+
+  // Fonction pour filtrer les courses par date
+  const filterCoursesByDate = (courses: Course[], date: Date) => {
+    const dayStart = startOfDay(date)
+    const dayEnd = endOfDay(date)
+    
+    return courses.filter((course: Course) => {
+      const courseDate = new Date(course.dateHeure)
+      return courseDate >= dayStart && courseDate <= dayEnd
+    })
+  }
+
+  // Filtrer les courses selon la date sélectionnée
+  useEffect(() => {
+    if (allCourses.length > 0 && !loading) {
+      const filteredCourses = filterCoursesByDate(allCourses, selectedDate)
+      setCourses(filteredCourses)
+    }
+  }, [selectedDate, loading])
+
+  // Re-filtrer quand allCourses change (après ajout/modification de course)
+  useEffect(() => {
+    if (allCourses.length > 0 && !loading) {
+      const filteredCourses = filterCoursesByDate(allCourses, selectedDate)
+      setCourses(filteredCourses)
+    }
+  }, [allCourses.length, loading])
 
   // Auto-scroll vers l'heure actuelle au chargement (seulement pour aujourd'hui)
   useEffect(() => {
@@ -449,15 +478,10 @@ export default function PlanningPage() {
         chauffeurs = chauffeurs.filter(user => user.id === session.user.id)
       }
 
-      // Filtrer les courses pour la date sélectionnée
-      const dayStart = startOfDay(selectedDate)
-      const dayEnd = endOfDay(selectedDate)
+      setAllCourses(coursesData) // Stocker toutes les courses
       
-      const filteredCourses = coursesData.filter((course: Course) => {
-        const courseDate = new Date(course.dateHeure)
-        return courseDate >= dayStart && courseDate <= dayEnd
-      })
-
+      // Filtrage initial pour la date courante
+      const filteredCourses = filterCoursesByDate(coursesData, selectedDate)
       setCourses(filteredCourses)
       setUsers(chauffeurs)
     } catch (error) {
@@ -485,8 +509,20 @@ export default function PlanningPage() {
       if (response.ok) {
         const result = await response.json()
         console.log('✅ Assignment successful:', result)
-        await fetchData() // Recharger les données
-        console.log('🔄 Data reloaded')
+        
+        // Mettre à jour directement l'état local au lieu de recharger tout
+        const updatedAllCourses = allCourses.map(course => 
+          course.id === courseId 
+            ? { ...course, userId: userId, statut: userId ? 'ASSIGNEE' : 'EN_ATTENTE' }
+            : course
+        )
+        setAllCourses(updatedAllCourses)
+        
+        // Filtrer manuellement car la longueur n'a pas changé
+        const filteredCourses = filterCoursesByDate(updatedAllCourses, selectedDate)
+        setCourses(filteredCourses)
+        
+        console.log('🔄 Data updated locally')
       } else {
         const result = await response.json()
         console.error('❌ Assignment failed:', result)

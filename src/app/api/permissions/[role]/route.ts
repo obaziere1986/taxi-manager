@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { executeWithRetry } from '@/lib/supabase'
-import type { RoleUtilisateur } from '@/lib/supabase'
+import type { RoleUtilisateur } from '@/lib/types'
 
 // PUT - Mettre à jour les permissions d'un rôle
 export async function PUT(

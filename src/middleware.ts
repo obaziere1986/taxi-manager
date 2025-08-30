@@ -1,14 +1,20 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-const publicRoutes = ['/login', '/api/auth', '/api/settings/debug', '/api/debug-auth', '/api/debug-nextauth', '/api/simple-login', '/api/current-user', '/api/logout', '/api/health', '/health']
+// Routes publiques selon l'environnement
+const basePublicRoutes = ['/login', '/api/current-user', '/api/logout', '/api/health', '/health', '/avis', '/api/avis/submit']
+const devOnlyRoutes = ['/api/settings/debug', '/api/debug-auth', '/api/debug-nextauth', '/api/clear-cookies', '/api/test-auth']
+
+const publicRoutes = process.env.NODE_ENV === 'development' 
+  ? [...basePublicRoutes, ...devOnlyRoutes]
+  : basePublicRoutes
 
 export async function middleware(request: NextRequest) {
   try {
     const { pathname } = request.nextUrl
   
   // Permettre l'accès aux routes publiques et aux APIs d'auth
-  if (publicRoutes.some(route => pathname.startsWith(route))) {
+  if (publicRoutes.some(route => pathname.startsWith(route)) || pathname.startsWith('/api/auth')) {
     const response = NextResponse.next();
     
     // Headers de cache pour les API
@@ -26,34 +32,13 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next()
   }
   
-  // Vérifier l'authentification JWT pour toutes les autres routes
-  const authToken = request.cookies.get('auth-token')?.value
+  // Vérifier l'authentification NextAuth pour toutes les autres routes
+  const sessionToken = request.cookies.get('next-auth.session-token')?.value || 
+                       request.cookies.get('__Secure-next-auth.session-token')?.value
   
-  if (pathname === '/') {
-    console.log('🔍 MIDDLEWARE ROOT CHECK:', {
-      pathname,
-      hasAuthToken: !!authToken,
-      cookies: request.cookies.getAll().map(c => c.name),
-      url: request.url
-    })
-  }
-  
-  if (!authToken) {
-    // Rediriger vers la page de connexion si non authentifié
+  if (!sessionToken) {
+    // Rediriger vers la page de connexion
     const loginUrl = new URL('/login', request.url)
-    return NextResponse.redirect(loginUrl)
-  }
-  
-  // Vérifier la validité du token JWT
-  try {
-    const { jwtVerify } = await import('jose')
-    const secret = new TextEncoder().encode(process.env.NEXTAUTH_SECRET || 'fallback-secret')
-    await jwtVerify(authToken, secret)
-  } catch (error) {
-    // Token invalide, rediriger vers login
-    console.error('Token JWT invalide:', error)
-    const loginUrl = new URL('/login', request.url)
-    loginUrl.searchParams.set('callbackUrl', pathname)
     return NextResponse.redirect(loginUrl)
   }
   

@@ -13,20 +13,30 @@ export const authOptions: NextAuthOptions = {
         password: { label: "Mot de passe", type: "password" }
       },
       async authorize(credentials) {
+        console.log('🔍 NextAuth authorize - credentials:', { login: credentials?.login, password: '***' })
+        
         if (!credentials?.login || !credentials?.password) {
+          console.log('❌ NextAuth authorize - missing credentials')
           return null
         }
 
         const supabase = getSupabaseClient()
 
-        // Rechercher l'utilisateur par email
+        // Rechercher l'utilisateur par email ou login
         const { data: users, error } = await supabase
           .from('users')
           .select('*')
-          .eq('email', credentials.login)
+          .or(`login.eq.${credentials.login},email.eq.${credentials.login}`)
           .eq('actif', true)
 
+        console.log('📊 NextAuth authorize - supabase result:', { 
+          users: users?.length || 0, 
+          error: error?.message,
+          query: `login.eq.${credentials.login},email.eq.${credentials.login}`
+        })
+
         if (error || !users || users.length === 0) {
+          console.log('❌ NextAuth authorize - no user found or error')
           return null
         }
 
@@ -42,7 +52,9 @@ export const authOptions: NextAuthOptions = {
         }
 
         // Vérifier le mot de passe
+        console.log('🔐 NextAuth authorize - checking password...')
         const isValidPassword = await bcrypt.compare(credentials.password, user.password_hash)
+        console.log('🔐 NextAuth authorize - password valid:', isValidPassword)
         
         if (!isValidPassword) {
           // Incrémenter les échecs de connexion

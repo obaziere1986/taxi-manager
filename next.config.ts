@@ -1,13 +1,15 @@
 import type { NextConfig } from "next";
 
+const isDevelopment = process.env.NODE_ENV === 'development';
+
 const nextConfig: NextConfig = {
   eslint: {
-    // Ignorer les erreurs ESLint pendant le build en dev
-    ignoreDuringBuilds: true,
+    // Ignorer les erreurs ESLint seulement en développement local
+    ignoreDuringBuilds: isDevelopment,
   },
   typescript: {
-    // Ignorer les erreurs TypeScript pendant le build en dev
-    ignoreBuildErrors: true,
+    // Ignorer les erreurs TypeScript seulement en développement local
+    ignoreBuildErrors: isDevelopment,
   }
 };
 

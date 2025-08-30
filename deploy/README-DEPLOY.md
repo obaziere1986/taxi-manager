@@ -1,14 +1,16 @@
-# Déploiement Taxi Manager sur flowcab.fr
+# Déploiement Taxi Manager sur app.flowcab.fr
 
 ## 🎯 Vue d'ensemble
 
-Ce guide détaille le déploiement de l'application Taxi Manager sur votre VPS Hostinger (69.62.108.105) avec le domaine flowcab.fr.
+Ce guide détaille le déploiement de l'application Taxi Manager sur votre VPS Hostinger (69.62.108.105) avec l'architecture multi-domaines :
+- **App** : app.flowcab.fr (application Taxi Manager)
+- **Landing** : flowcab.fr (page d'accueil - futur)
 
 ## 📋 Prérequis
 
 - **VPS :** KVM 2 - Ubuntu 24.04 (2 vCores, 8GB RAM, 100GB SSD)
-- **Domaine :** flowcab.fr (DNS configuré vers 69.62.108.105)
-- **Application :** Next.js 15 + Supabase
+- **Domaines :** app.flowcab.fr + flowcab.fr (DNS configuré vers 69.62.108.105)
+- **Application :** Next.js 15 + Supabase + NextAuth
 
 ## 🚀 Déploiement Étape par Étape
 
@@ -61,8 +63,8 @@ pnpm --version
 
 ```bash
 # Création du répertoire de déploiement
-mkdir -p /var/www/flowcab.fr
-cd /var/www/flowcab.fr
+mkdir -p /var/www/app.flowcab.fr
+cd /var/www/app.flowcab.fr
 
 # Extraction de l'application
 tar -xzf ~/taxi-manager-deploy.tar.gz
@@ -80,7 +82,7 @@ pnpm build
 # Créer le fichier .env.production.local
 cat > .env.production.local << 'EOF'
 NODE_ENV=production
-NEXTAUTH_URL=https://flowcab.fr
+NEXTAUTH_URL=https://app.flowcab.fr
 NEXTAUTH_SECRET=your-super-secret-nextauth-key-here
 NEXT_PUBLIC_SUPABASE_URL=https://pligynlgfmnequzijtqk.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
@@ -124,10 +126,10 @@ certbot renew --dry-run
 
 ```bash
 # Copier la configuration PM2
-cp ~/ecosystem.config.js /var/www/flowcab.fr/
+cp ~/ecosystem.config.js /var/www/app.flowcab.fr/
 
 # Lancer l'application
-cd /var/www/flowcab.fr
+cd /var/www/app.flowcab.fr
 pm2 start ecosystem.config.js
 
 # Configurer le démarrage automatique
@@ -149,7 +151,7 @@ curl -I http://localhost:3000
 
 # Vérifier le redirections HTTPS
 curl -I http://flowcab.fr
-curl -I https://flowcab.fr
+curl -I https://app.flowcab.fr
 
 # Vérifier les logs
 pm2 logs taxi-manager
@@ -178,10 +180,10 @@ free -h
 pm2 stop taxi-manager
 
 # Backup
-cp -r /var/www/flowcab.fr /var/www/flowcab.fr.backup.$(date +%Y%m%d)
+cp -r /var/www/app.flowcab.fr /var/www/app.flowcab.fr.backup.$(date +%Y%m%d)
 
 # Déployer la nouvelle version
-cd /var/www/flowcab.fr
+cd /var/www/app.flowcab.fr
 tar -xzf ~/nouvelle-version.tar.gz
 pnpm install --production
 pnpm build
@@ -244,4 +246,4 @@ En cas de problème :
 - [ ] Firewall configuré
 - [ ] Monitoring mis en place
 
-Une fois terminé, votre application sera accessible sur **https://flowcab.fr** ! 🎉
+Une fois terminé, votre application sera accessible sur **https://app.flowcab.fr** ! 🎉

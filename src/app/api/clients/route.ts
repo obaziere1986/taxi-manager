@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth/next'
+import { authOptions } from '@/lib/auth'
 import { executeWithRetry } from '@/lib/supabase'
 
 export async function GET() {
+  const session = await getServerSession(authOptions)
+  
+  if (!session?.user) {
+    return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+  }
   try {
     const clients = await executeWithRetry(async (supabase) => {
       // Récupérer tous les clients avec un tri, incluant reviews_disabled
@@ -22,7 +29,7 @@ export async function GET() {
           const { data: courses, error: coursesError } = await supabase
             .from('courses')
             .select(`
-              id, origine, destination, date_heure, statut, notes, user_id,
+              id, origine, destination, date_heure, statut, notes, user_id, client_id, created_at, updated_at,
               users!courses_user_id_fkey (
                 id, nom, prenom
               )

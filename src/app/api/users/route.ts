@@ -1,10 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { executeWithRetry } from '@/lib/supabase'
+import { executeWithRetry, getSupabaseAdminClient } from '@/lib/supabase'
 import { sendWelcomeEmail } from '@/lib/mail-hooks'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 
 // GET - Récupérer tous les utilisateurs (remplace l'ancienne API chauffeurs)
 export async function GET(request: NextRequest) {
   try {
+    // Vérification de l'authentification
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+    }
+
     const { searchParams } = new URL(request.url)
     const role = searchParams.get('role') // Filtre optionnel par rôle
     const inactive = searchParams.get('inactive') // Filtre pour récupérer les inactifs
@@ -35,26 +43,28 @@ export async function GET(request: NextRequest) {
         throw usersError
       }
 
-      // Pour chaque utilisateur, compter ses courses (simuler le _count de Prisma)
-      const usersWithCounts = await Promise.all(
-        (usersData || []).map(async (user) => {
-          const { count, error: countError } = await supabase
-            .from('courses')
-            .select('*', { count: 'exact', head: true })
-            .eq('user_id', user.id)
-          
-          if (countError) {
-            console.warn('Erreur lors du comptage des courses pour l\'utilisateur', user.id, ':', countError)
-          }
-          
-          return {
-            ...user,
-            _count: {
-              courses: count || 0
-            }
+      // Compter toutes les courses d'un coup puis grouper par utilisateur
+      const { data: allCourses, error: coursesError } = await supabase
+        .from('courses')
+        .select('user_id')
+      
+      // Compter les courses par utilisateur
+      const courseCounts: Record<string, number> = {}
+      if (!coursesError && allCourses) {
+        allCourses.forEach(course => {
+          if (course.user_id) {
+            courseCounts[course.user_id] = (courseCounts[course.user_id] || 0) + 1
           }
         })
-      )
+      }
+
+      // Ajouter le count à chaque utilisateur
+      const usersWithCounts = (usersData || []).map(user => ({
+        ...user,
+        _count: {
+          courses: courseCounts[user.id] || 0
+        }
+      }))
 
       return usersWithCounts
     })
@@ -72,6 +82,17 @@ export async function GET(request: NextRequest) {
 // POST - Créer un nouvel utilisateur
 export async function POST(request: NextRequest) {
   try {
+    // Vérification de l'authentification
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+    }
+
+    // Vérification des permissions (seuls Admin et Planner peuvent créer des utilisateurs)
+    if (!['Admin', 'Planner'].includes(session.user.role)) {
+      return NextResponse.json({ error: 'Permissions insuffisantes' }, { status: 403 })
+    }
+
     const body = await request.json()
     
     const { nom, prenom, email, telephone, role, statut, vehicule, vehiculeId } = body
@@ -84,9 +105,12 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const user = await executeWithRetry(async (supabase) => {
+    // Utiliser le client admin pour créer des utilisateurs
+    const adminSupabase = getSupabaseAdminClient()
+    
+    const user = await (async () => {
       // Vérifier que l'email n'existe pas
-      const { data: existingUser, error: checkError } = await supabase
+      const { data: existingUser, error: checkError } = await adminSupabase
         .from('users')
         .select('id')
         .eq('email', email.toLowerCase())
@@ -102,7 +126,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Créer le nouvel utilisateur
-      const { data: newUser, error: insertError } = await supabase
+      const { data: newUser, error: insertError } = await adminSupabase
         .from('users')
         .insert({
           nom: nom.toUpperCase(),
@@ -133,7 +157,7 @@ export async function POST(request: NextRequest) {
           courses: 0
         }
       }
-    })
+    })()
 
     // Envoyer l'email de bienvenue en arrière-plan
     try {

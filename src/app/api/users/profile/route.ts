@@ -1,21 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { jwtVerify } from 'jose'
+import { getServerSession } from 'next-auth/next'
+import { authOptions } from '@/lib/auth'
 import { executeWithRetry } from '@/lib/supabase'
 
 // GET - Récupérer le profil de l'utilisateur connecté
 export async function GET(request: NextRequest) {
   try {
-    const authToken = request.cookies.get('auth-token')?.value
+    const session = await getServerSession(authOptions)
     
-    if (!authToken) {
-      return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
-    }
-
-    // Vérifier le token JWT
-    const secret = new TextEncoder().encode(process.env.NEXTAUTH_SECRET || 'fallback-secret')
-    const { payload } = await jwtVerify(authToken, secret)
-    
-    if (!payload.userId) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
     }
 
@@ -23,7 +16,7 @@ export async function GET(request: NextRequest) {
       const { data, error } = await supabase
         .from('users')
         .select('id, nom, prenom, email, telephone, role, notifications_email, notifications_sms, notifications_desktop, avatar_url, last_login_at, created_at')
-        .eq('id', payload.userId)
+        .eq('id', session.user.id)
         .single()
       
       if (error) throw error
@@ -44,17 +37,9 @@ export async function GET(request: NextRequest) {
 // PUT - Mettre à jour le profil de l'utilisateur connecté
 export async function PUT(request: NextRequest) {
   try {
-    const authToken = request.cookies.get('auth-token')?.value
+    const session = await getServerSession(authOptions)
     
-    if (!authToken) {
-      return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
-    }
-
-    // Vérifier le token JWT
-    const secret = new TextEncoder().encode(process.env.NEXTAUTH_SECRET || 'fallback-secret')
-    const { payload } = await jwtVerify(authToken, secret)
-    
-    if (!payload.userId) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
     }
 
@@ -67,13 +52,13 @@ export async function PUT(request: NextRequest) {
     }
 
     // Vérifier si l'email est déjà utilisé par un autre utilisateur
-    if (email !== payload.email) {
+    if (email !== session.user.email) {
       const existingUser = await executeWithRetry(async (supabase) => {
         const { data, error } = await supabase
           .from('users')
           .select('id')
           .eq('email', email)
-          .neq('id', payload.userId)
+          .neq('id', session.user.id)
           .single()
         
         if (error && error.code !== 'PGRST116') throw error
@@ -98,7 +83,7 @@ export async function PUT(request: NextRequest) {
           notifications_sms: Boolean(notificationsSMS),
           notifications_desktop: Boolean(notificationsDesktop)
         })
-        .eq('id', payload.userId)
+        .eq('id', session.user.id)
         .select('id, nom, prenom, email, telephone, role, notifications_email, notifications_sms, notifications_desktop, avatar_url, last_login_at, created_at')
         .single()
       

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { executeWithRetry } from '@/lib/supabase'
-import type { RoleUtilisateur } from '@/lib/supabase'
+import type { RoleUtilisateur } from '@/lib/types'
 
 // GET - Vérifier une permission spécifique
 export async function GET(request: NextRequest) {

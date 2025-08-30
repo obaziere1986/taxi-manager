@@ -1,12 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { executeWithRetry } from '@/lib/supabase'
 import { sendCourseAssignmentEmail, scheduleReminders } from '@/lib/mail-hooks'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Vérification de l'authentification
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+    }
+
     const { id } = await params
     const body = await request.json()
     const { userId } = body

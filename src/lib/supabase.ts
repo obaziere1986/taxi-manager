@@ -3,6 +3,7 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js'
 // Configuration Supabase
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
 // Instance du client Supabase
 let supabaseInstance: SupabaseClient | null = null
@@ -23,6 +24,19 @@ export function getSupabaseClient(): SupabaseClient {
   }
   
   return supabaseInstance
+}
+
+// Client admin avec service role pour les opérations sensibles
+export function getSupabaseAdminClient(): SupabaseClient {
+  if (!supabaseUrl || !supabaseServiceKey) {
+    throw new Error('Les variables d\'environnement Supabase admin ne sont pas configurées')
+  }
+  
+  return createClient(supabaseUrl, supabaseServiceKey, {
+    auth: {
+      persistSession: false
+    }
+  })
 }
 
 // Fonction utilitaire pour exécuter des opérations avec retry automatique

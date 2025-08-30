@@ -1,36 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { jwtVerify } from 'jose'
+import { getServerSession } from 'next-auth/next'
+import { authOptions } from '@/lib/auth'
 
 export async function GET(request: NextRequest) {
   try {
-    const authToken = request.cookies.get('auth-token')?.value
+    const session = await getServerSession(authOptions)
     
-    if (!authToken) {
+    if (!session?.user) {
       return NextResponse.json({ 
         success: false, 
-        message: 'Token non fourni' 
+        message: 'Non authentifié' 
       }, { status: 401 })
     }
-
-    // Vérifier et décoder le JWT
-    const secret = new TextEncoder().encode(process.env.NEXTAUTH_SECRET || 'fallback-secret')
-    const { payload } = await jwtVerify(authToken, secret)
 
     return NextResponse.json({
       success: true,
       user: {
-        id: payload.userId,
-        email: payload.email,
-        name: payload.name,
-        role: payload.role
+        id: session.user.id,
+        email: session.user.email,
+        name: session.user.name,
+        role: session.user.role,
+        statut: session.user.statut,
+        avatarUrl: session.user.avatarUrl
       }
     })
 
   } catch (error) {
-    console.error('Erreur décodage JWT:', error)
+    console.error('Erreur récupération session:', error)
     return NextResponse.json({ 
       success: false, 
-      message: 'Token invalide' 
-    }, { status: 401 })
+      message: 'Erreur serveur' 
+    }, { status: 500 })
   }
 }

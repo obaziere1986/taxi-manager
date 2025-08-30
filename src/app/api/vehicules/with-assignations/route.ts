@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth/next'
+import { authOptions } from '@/lib/auth'
 import { executeWithRetry } from '@/lib/supabase'
 
 export async function GET() {
+  const session = await getServerSession(authOptions)
+  
+  if (!session?.user) {
+    return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+  }
   try {
     console.log('🔄 API Véhicules avec assignations - début')
     

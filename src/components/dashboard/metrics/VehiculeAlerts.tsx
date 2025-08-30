@@ -47,14 +47,14 @@ export function VehiculeAlerts() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (session) {
-      if (session.user?.role === 'Chauffeur') {
+    if (session?.user?.id) {
+      if (session.user.role === 'Chauffeur') {
         fetchChauffeurVehiculeInfo()
       } else {
         fetchVehicules()
       }
     }
-  }, [session])
+  }, [session?.user?.id, session?.user?.role])
 
   const fetchChauffeurVehiculeInfo = async () => {
     try {
@@ -63,16 +63,11 @@ export function VehiculeAlerts() {
       const data = await response.json()
       
       if (Array.isArray(data)) {
-        console.log('VehiculeAlerts - Session user ID:', session?.user?.id)
-        console.log('VehiculeAlerts - Véhicules avec assignations:', data)
-        
         // Trouver le véhicule assigné au chauffeur connecté
         const chauffeurVehicule = data.find(vehicule => 
           vehicule.assignation?.assignedToRole === 'Chauffeur' &&
           vehicule.assignation?.assignedToId === session?.user?.id
         )
-        
-        console.log('VehiculeAlerts - Véhicule trouvé pour le chauffeur:', chauffeurVehicule)
         
         if (chauffeurVehicule) {
           // Récupérer les détails complets avec les dates d'entretien

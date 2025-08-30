@@ -1,8 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth/next'
+import { authOptions } from '@/lib/auth'
 import { executeWithRetry } from '@/lib/supabase'
 
 // GET - Récupérer tous les véhicules
 export async function GET() {
+  const session = await getServerSession(authOptions)
+  
+  if (!session?.user) {
+    return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+  }
   try {
     const vehicules = await executeWithRetry(async (supabase) => {
       const { data, error } = await supabase
