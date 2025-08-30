@@ -1,6 +1,11 @@
-import { ReactNode } from 'react'
-import { useSession } from 'next-auth/react'
-import { usePermissions } from '@/hooks/usePermissions'
+import { ReactNode, useState, useEffect } from 'react'
+
+interface User {
+  id: string
+  email: string
+  name: string
+  role: string
+}
 
 interface ProtectedComponentProps {
   children: ReactNode
@@ -17,21 +22,42 @@ export function ProtectedComponent({
   fallback = null,
   role 
 }: ProtectedComponentProps) {
-  const { data: session } = useSession()
-  const { hasPermission, hasAnyPermission, hasAllPermissions, loading, isAdmin, isAuthenticated } = usePermissions(permissions)
+  const [user, setUser] = useState<User | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const response = await fetch('/api/current-user')
+        const result = await response.json()
+        
+        if (result.success) {
+          setUser(result.user)
+        }
+      } catch (error) {
+        console.error('Erreur chargement utilisateur:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchUser()
+  }, [])
+
+  // Afficher un loader pendant la vérification
+  if (loading) {
+    return null
+  }
 
   // Vérifier l'authentification
-  if (!isAuthenticated) {
+  if (!user) {
     return <>{fallback}</>
   }
 
-  // Afficher un loader pendant la vérification des permissions
-  if (loading && permissions.length > 0) {
-    return null // ou un spinner si souhaité
-  }
-
+  const isAdmin = user.role === 'Admin'
+  
   // Vérifier le rôle spécifique si demandé
-  if (role && session?.user?.role !== role && !isAdmin) {
+  if (role && user.role !== role && !isAdmin) {
     return <>{fallback}</>
   }
 
@@ -45,10 +71,21 @@ export function ProtectedComponent({
     return <>{children}</>
   }
 
-  // Vérifier les permissions
-  const hasAccess = requireAll 
-    ? hasAllPermissions(permissions)
-    : hasAnyPermission(permissions)
+  // Pour le moment, on simplifie les permissions basées sur le rôle
+  // Admin a accès à tout, les autres selon leurs besoins
+  let hasAccess = false
+  
+  if (user.role === 'Admin') {
+    hasAccess = true // Admin a accès à tout
+  } else if (user.role === 'Planner') {
+    // Planner a accès à presque tout sauf les permissions d'admin
+    hasAccess = !permissions.includes('admin.manage')
+  } else if (user.role === 'Chauffeur') {
+    // Chauffeur n'a accès qu'au dashboard et ses propres données
+    hasAccess = permissions.includes('analytics.read') || 
+                permissions.includes('courses.read') ||
+                permissions.includes('clients.read')
+  }
 
   return hasAccess ? <>{children}</> : <>{fallback}</>
 }

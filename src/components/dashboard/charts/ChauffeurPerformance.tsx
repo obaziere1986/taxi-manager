@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from 'react'
-import { useSession } from 'next-auth/react'
+import { useAuth } from "@/hooks/useAuth"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
@@ -18,7 +18,7 @@ interface ChauffeurPerformance {
 }
 
 export function ChauffeurPerformance() {
-  const { data: session } = useSession()
+  const { data: session } = useAuth()
   const [data, setData] = useState<ChauffeurPerformance[]>([])
   const [allData, setAllData] = useState<ChauffeurPerformance[]>([])
   const [loading, setLoading] = useState(true)

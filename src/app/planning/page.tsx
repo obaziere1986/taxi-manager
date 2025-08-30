@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from 'react'
-import { useSession } from 'next-auth/react'
+import { useAuth } from "@/hooks/useAuth"
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -227,7 +227,7 @@ function ChauffeurVerticalPlanning({
 }
 
 export default function PlanningPage() {
-  const { data: session } = useSession()
+  const { data: session } = useAuth()
   const { settings } = useSettings()
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [courses, setCourses] = useState<Course[]>([])

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from 'react'
-import { useSession } from 'next-auth/react'
+import { useAuth } from "@/hooks/useAuth"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -77,7 +77,7 @@ export function CourseModal({
   onStatusUpdate,
   onDelete
 }: CourseModalProps) {
-  const { data: session } = useSession()
+  const { data: session } = useAuth()
   const [mode, setMode] = useState(initialMode)
   const [loading, setLoading] = useState(false)
   const [showNewClientForm, setShowNewClientForm] = useState(false)

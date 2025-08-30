@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect } from 'react'
-import { useSession, update } from 'next-auth/react'
+import { useAuth } from "@/hooks/useAuth"
 import { PageHeader } from '@/components/page-header'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -155,7 +155,7 @@ interface CombinedUser {
 }
 
 export default function ParametresPage() {
-  const { data: session } = useSession()
+  const { data: session } = useAuth()
   const [activeTab, setActiveTab] = useState("profil")
   const { isEnabled: calendarEnabled, getCalendarUrl } = useCalendarPermission()
   const [copiedCalendar, setCopiedCalendar] = useState<string | null>(null)
@@ -1278,7 +1278,7 @@ export default function ParametresPage() {
 
 // Composant pour la section Profil
 function ProfilSection() {
-  const { data: session, update } = useSession()
+  const { data: session } = useAuth()
   const [isLoading, setIsLoading] = useState(false)
   const [isLoadingProfile, setIsLoadingProfile] = useState(true)
   const [formData, setFormData] = useState({

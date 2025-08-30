@@ -1,6 +1,6 @@
 "use client"
 
-import { useSession, signOut } from "next-auth/react"
+import { useState, useEffect } from 'react'
 import { Button } from "@/components/ui/button"
 import { UserAvatar } from "@/components/ui/user-avatar"
 import {
@@ -14,20 +14,53 @@ import {
 import { LogOut, User, Settings } from "lucide-react"
 import { useRouter } from "next/navigation"
 
+interface User {
+  id: string
+  email: string
+  name: string
+  role: string
+  avatarUrl?: string
+}
+
 export function UserProfile() {
-  const { data: session } = useSession()
+  const [user, setUser] = useState<User | null>(null)
   const router = useRouter()
 
-  if (!session?.user) {
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const response = await fetch('/api/current-user')
+        const result = await response.json()
+        
+        if (result.success) {
+          setUser(result.user)
+        }
+      } catch (error) {
+        console.error('Erreur chargement utilisateur:', error)
+      }
+    }
+
+    fetchUser()
+  }, [])
+
+  if (!user) {
     return null
   }
 
-  const user = session.user
   const firstName = user.name?.split(' ')[0] || 'Utilisateur'
   const initials = `${user.name?.split(' ')[0]?.[0] || ''}${user.name?.split(' ')[1]?.[0] || ''}`.toUpperCase()
 
-  const handleSignOut = () => {
-    signOut({ callbackUrl: '/login' })
+  const handleSignOut = async () => {
+    try {
+      await fetch('/api/logout', { method: 'POST' })
+      router.push('/login')
+      router.refresh()
+    } catch (error) {
+      console.error('Erreur déconnexion:', error)
+      // Forcer la redirection même en cas d'erreur
+      router.push('/login')
+      router.refresh()
+    }
   }
 
   const handleGoToProfile = () => {

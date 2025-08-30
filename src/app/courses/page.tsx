@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useSession } from 'next-auth/react';
+import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -258,7 +258,7 @@ function CategorySection({
 }
 
 export default function CoursesPage() {
-  const { data: session } = useSession();
+  const { data: session } = useAuth();
   const [courses, setCourses] = useState<Course[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [users, setUsers] = useState<User[]>([]);

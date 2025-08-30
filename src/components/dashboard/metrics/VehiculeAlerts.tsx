@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from 'react'
-import { useSession } from 'next-auth/react'
+import { useAuth } from "@/hooks/useAuth"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { AlertTriangle, Car, Wrench, ExternalLink, Calendar } from "lucide-react"
@@ -41,7 +41,7 @@ interface VehiculeWithAssignation {
 }
 
 export function VehiculeAlerts() {
-  const { data: session } = useSession()
+  const { data: session } = useAuth()
   const [vehicules, setVehicules] = useState<Vehicule[]>([])
   const [vehiculeInfo, setVehiculeInfo] = useState<VehiculeWithAssignation | null>(null)
   const [loading, setLoading] = useState(true)

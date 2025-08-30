@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from 'react'
-import { useSession } from 'next-auth/react'
+import { useAuth } from "@/hooks/useAuth"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -32,7 +32,7 @@ interface UserModalProps {
 }
 
 export function UserModal({ isOpen, onClose, onSave, onPermanentDelete, user, mode }: UserModalProps) {
-  const { data: session } = useSession()
+  const { data: session } = useAuth()
   const [formData, setFormData] = useState<Partial<User>>({
     nom: '',
     prenom: '',
