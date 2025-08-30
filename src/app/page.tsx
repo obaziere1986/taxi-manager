@@ -48,7 +48,7 @@ export default function Home() {
 
   const fetchUser = async () => {
     try {
-      const response = await fetch('/api/auth/user')
+      const response = await fetch('/api/current-user')
       const result = await response.json()
       
       if (result.success) {
