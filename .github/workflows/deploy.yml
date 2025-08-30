@@ -95,6 +95,9 @@ jobs:
             # Build de production sur le serveur
             NODE_ENV=production pnpm build
             
+            # Libérer le port 3000
+            lsof -ti:3000 | xargs kill -9 || true
+            
             # Arrêt de l'ancienne version
             pm2 stop taxi-manager || true
             
