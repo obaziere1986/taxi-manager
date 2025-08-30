@@ -6,7 +6,20 @@ import { getSupabaseClient } from "@/lib/supabase"
 export async function POST(request: NextRequest) {
   console.log('📡 API LOGIN - Tentative connexion')
   try {
-    const { email, password } = await request.json()
+    // Support à la fois JSON (React) et form-data (HTML)
+    let email: string, password: string
+    
+    const contentType = request.headers.get('content-type')
+    if (contentType?.includes('application/json')) {
+      const body = await request.json()
+      email = body.email
+      password = body.password
+    } else {
+      // Form-data HTML
+      const formData = await request.formData()
+      email = formData.get('email') as string
+      password = formData.get('password') as string
+    }
 
     if (!email || !password) {
       return NextResponse.json({ 
