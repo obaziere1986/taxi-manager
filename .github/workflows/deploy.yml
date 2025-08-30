@@ -35,7 +35,7 @@ jobs:
           # Utilisation de git archive pour éviter complètement les conflits tar
           # Ne prend que les fichiers suivis par git, aucun conflit possible
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
-          git archive --format=tar HEAD | gzip > taxi-manager-deploy.tar.gz
+          git archive --format=tar --prefix=app/ HEAD | gzip > taxi-manager-deploy.tar.gz
 
       - name: 🔑 Setup SSH key
         uses: webfactory/ssh-agent@v0.9.0
@@ -66,7 +66,7 @@ jobs:
             cd /var/www/app.flowcab.fr.new
             
             # Extraction de la nouvelle version
-            tar -xzf ~/taxi-manager-new.tar.gz
+            tar -xzf ~/taxi-manager-new.tar.gz --strip-components=1
             
             # Conservation des variables d'environnement
             if [ -f "/var/www/app.flowcab.fr/.env.production.local" ]; then
