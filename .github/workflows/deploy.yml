@@ -28,11 +28,14 @@ jobs:
       - name: 🔧 Install dependencies
         run: pnpm install
 
+      - name: 🧹 Clean build cache
+        run: rm -rf .next
+
       - name: 🏗️ Build application
         run: pnpm build
         env:
           NODE_ENV: production
-          NEXTAUTH_URL: https://flowcab.fr
+          NEXTAUTH_URL: https://app.flowcab.fr
           NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
@@ -83,8 +86,14 @@ jobs:
               cp /var/www/flowcab.fr/.env.production.local .env.production.local
             fi
             
-            # Installation des dépendances (production only)
-            pnpm install --production
+            # Installation de toutes les dépendances
+            pnpm install
+            
+            # Nettoyage du cache Next.js
+            rm -rf .next
+            
+            # Build de production sur le serveur
+            NODE_ENV=production pnpm build
             
             # Arrêt de l'ancienne version
             pm2 stop taxi-manager || true
