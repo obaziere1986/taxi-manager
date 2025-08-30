@@ -38,9 +38,9 @@ export default function LoginPage() {
       const result = await response.json()
 
       if (result.success) {
-        // Connexion réussie, rediriger vers dashboard
-        router.push('/')
-        router.refresh()
+        // Connexion réussie, forcer un reload complet pour que le middleware voie le cookie
+        alert('✅ Connexion réussie, redirection...')
+        window.location.href = '/'
       } else {
         setError(result.message || 'Identifiants incorrects. Veuillez réessayer.')
       }

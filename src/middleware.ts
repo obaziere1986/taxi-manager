@@ -29,6 +29,15 @@ export async function middleware(request: NextRequest) {
   // Vérifier l'authentification JWT pour toutes les autres routes
   const authToken = request.cookies.get('auth-token')?.value
   
+  if (pathname === '/') {
+    console.log('🔍 MIDDLEWARE ROOT CHECK:', {
+      pathname,
+      hasAuthToken: !!authToken,
+      cookies: request.cookies.getAll().map(c => c.name),
+      url: request.url
+    })
+  }
+  
   if (!authToken) {
     // Rediriger vers la page de connexion si non authentifié
     const loginUrl = new URL('/login', request.url)
