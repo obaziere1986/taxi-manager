@@ -179,4 +179,4 @@ pnpm test
 ---
 
 **Développé avec ❤️ en France** 🇫🇷  
-*Dernière mise à jour : 26 août 2025 - Version Supabase PostgreSQL*
+*Dernière mise à jour : 26 août 2025 - Version Supabase PostgreSQL*# Déploiement production - sam. 30 août 2025 21:17:42 CEST
