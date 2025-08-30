@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useEffect } from 'react'
-import { useSession } from 'next-auth/react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { PageHeader } from '@/components/page-header'
@@ -10,6 +9,13 @@ import { startOfDay, endOfDay } from 'date-fns'
 import { CoursesTimeline } from '@/components/dashboard/charts/CoursesTimeline'
 import { ChauffeurPerformance } from '@/components/dashboard/charts/ChauffeurPerformance'
 import { VehiculeAlerts } from '@/components/dashboard/metrics/VehiculeAlerts'
+
+interface User {
+  id: string
+  email: string
+  name: string
+  role: string
+}
 
 interface DashboardStats {
   coursesToday: number
@@ -23,7 +29,7 @@ interface DashboardStats {
 }
 
 export default function Home() {
-  const { data: session } = useSession()
+  const [user, setUser] = useState<User | null>(null)
   const [stats, setStats] = useState<DashboardStats>({
     coursesToday: 0,
     coursesYesterday: 0,
@@ -37,15 +43,28 @@ export default function Home() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (session) {
-      fetchDashboardData()
-    }
-  }, [session])
+    fetchUser()
+  }, [])
 
-  const fetchDashboardData = async () => {
+  const fetchUser = async () => {
+    try {
+      const response = await fetch('/api/auth/user')
+      const result = await response.json()
+      
+      if (result.success) {
+        setUser(result.user)
+        fetchDashboardData(result.user)
+      }
+    } catch (error) {
+      console.error('Erreur chargement utilisateur:', error)
+      setLoading(false)
+    }
+  }
+
+  const fetchDashboardData = async (currentUser: User) => {
     try {
       // Pour les chauffeurs, ne charger que les cours qui leur sont assignées
-      const coursesUrl = session?.user?.role === 'Chauffeur' ? `/api/courses?userId=${session.user.id}` : '/api/courses'
+      const coursesUrl = currentUser?.role === 'Chauffeur' ? `/api/courses?userId=${currentUser.id}` : '/api/courses'
       
       const [coursesRes, usersRes, clientsRes] = await Promise.all([
         fetch(coursesUrl),
@@ -68,8 +87,8 @@ export default function Home() {
       const chauffeurs = Array.isArray(users) ? users.filter(user => user.role === 'Chauffeur') : []
       
       // Si c'est un chauffeur, ne pas afficher les stats des autres chauffeurs
-      const visibleChauffeurs = session?.user?.role === 'Chauffeur' ? 
-        chauffeurs.filter(c => c.id === session.user.id) : chauffeurs
+      const visibleChauffeurs = currentUser?.role === 'Chauffeur' ? 
+        chauffeurs.filter(c => c.id === currentUser.id) : chauffeurs
 
       // Vérifier que les données sont des tableaux
       if (!Array.isArray(courses) || !Array.isArray(users) || !Array.isArray(clients)) {
@@ -128,7 +147,7 @@ export default function Home() {
   }
 
   // Extraire le prénom de l'utilisateur
-  const firstName = session?.user?.name?.split(' ')[0] || 'Utilisateur'
+  const firstName = user?.name?.split(' ')[0] || 'Utilisateur'
   const dashboardTitle = `Dashboard de ${firstName}`
 
   if (loading) {
@@ -147,7 +166,7 @@ export default function Home() {
       <div className="flex-1 p-6 space-y-6">
         
         {/* KPIs de base */}
-        <div className={`grid gap-4 ${session?.user?.role === 'Chauffeur' ? 'md:grid-cols-3 lg:grid-cols-3' : 'md:grid-cols-2 lg:grid-cols-4'}`}>
+        <div className={`grid gap-4 ${user?.role === 'Chauffeur' ? 'md:grid-cols-3 lg:grid-cols-3' : 'md:grid-cols-2 lg:grid-cols-4'}`}>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Courses du jour</CardTitle>
@@ -162,7 +181,7 @@ export default function Home() {
           </Card>
           
           {/* Masquer la carte chauffeurs actifs pour les chauffeurs */}
-          {session?.user?.role !== 'Chauffeur' && (
+          {user?.role !== 'Chauffeur' && (
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Chauffeurs actifs</CardTitle>
@@ -208,7 +227,7 @@ export default function Home() {
         </div>
 
         {/* Section détaillée */}
-        <div className={`grid gap-6 ${session?.user?.role === 'Chauffeur' ? 'md:grid-cols-2 lg:grid-cols-2' : 'md:grid-cols-3 lg:grid-cols-3'}`}>
+        <div className={`grid gap-6 ${user?.role === 'Chauffeur' ? 'md:grid-cols-2 lg:grid-cols-2' : 'md:grid-cols-3 lg:grid-cols-3'}`}>
                     
           {/* Alertes véhicules */}
           <VehiculeAlerts />
@@ -241,7 +260,7 @@ export default function Home() {
           </Card>
           
           {/* Chauffeurs disponibles - uniquement pour Admin/Planner */}
-          {session?.user?.role !== 'Chauffeur' && (
+          {user?.role !== 'Chauffeur' && (
             <Card>
               <CardHeader>
                 <CardTitle>Équipe disponible</CardTitle>
