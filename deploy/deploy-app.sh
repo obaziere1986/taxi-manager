@@ -28,6 +28,35 @@ else
   fi
 fi
 
+# Mise à jour du système et installation des dépendances
+echo "📦 Mise à jour du système..."
+apt-get update
+
+# Installation de Node.js et pnpm si nécessaire
+if ! command -v node &> /dev/null; then
+  echo "📦 Installation de Node.js..."
+  curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+  apt-get install -y nodejs
+fi
+
+# Installation nginx si nécessaire
+if ! command -v nginx &> /dev/null; then
+  echo "📦 Installation de nginx..."
+  apt-get install -y nginx
+  systemctl enable nginx
+fi
+
+if ! command -v pnpm &> /dev/null; then
+  echo "📦 Installation de pnpm..."
+  npm install -g pnpm
+fi
+
+# Installation PM2 si nécessaire
+if ! command -v pm2 &> /dev/null; then
+  echo "📦 Installation de PM2..."
+  npm install -g pm2
+fi
+
 # Dépendances + build
 echo "📦 Installation des dépendances..."
 pnpm install
@@ -64,6 +93,18 @@ cp deploy/ecosystem.config.prod.js ecosystem.config.js
 echo "▶️ Redémarrage de l'application..."
 pm2 start ecosystem.config.js || pm2 restart taxi-manager
 pm2 save
+
+# Configuration nginx
+echo "🌐 Configuration nginx..."
+if [ -f "deploy/nginx-multi-domains.conf" ]; then
+  cp deploy/nginx-multi-domains.conf /etc/nginx/sites-available/taxi-manager
+  ln -sf /etc/nginx/sites-available/taxi-manager /etc/nginx/sites-enabled/
+  rm -f /etc/nginx/sites-enabled/default
+  nginx -t && systemctl reload nginx
+  echo "✅ Nginx configuré"
+else
+  echo "⚠️ Fichier nginx non trouvé, configuration manuelle requise"
+fi
 
 # Nettoyage
 echo "🧹 Nettoyage..."
