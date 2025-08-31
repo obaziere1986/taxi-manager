@@ -4,6 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:pm2": "pm2 start ecosystem.config.dev.js",
+    "dev:pm2:stop": "pm2 stop taxi-manager-dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",

@@ -6,9 +6,8 @@ export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
     
-    // Récupérer les cookies
+    // Récupérer les cookies NextAuth seulement
     const cookies = {
-      'auth-token': request.cookies.get('auth-token')?.value || null,
       'next-auth.session-token': request.cookies.get('next-auth.session-token')?.value || null,
       '__Secure-next-auth.session-token': request.cookies.get('__Secure-next-auth.session-token')?.value || null,
       'next-auth.csrf-token': request.cookies.get('next-auth.csrf-token')?.value || null,

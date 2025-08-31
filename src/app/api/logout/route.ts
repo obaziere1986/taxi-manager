@@ -34,8 +34,7 @@ export async function POST() {
       secure: true
     })
     
-    // Cookie JWT legacy (au cas où)
-    response.cookies.set('auth-token', '', cookieOptions)
+    // Plus de cookies legacy - NextAuth seulement
 
     return response
 

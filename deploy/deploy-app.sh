@@ -56,26 +56,10 @@ mv /var/www/app.flowcab.fr.new /var/www/app.flowcab.fr
 # PM2
 echo "🚀 Configuration PM2..."
 cd /var/www/app.flowcab.fr
-# Force la copie du bon ecosystem.config.js depuis le repo déployé
-if [ -f "ecosystem.config.js" ]; then
-  echo "✅ Utilisation ecosystem.config.js du repo"
-else
-  echo "⚠️ ecosystem.config.js manquant, création basique"
-  cat > ecosystem.config.js << 'EOF'
-module.exports = {
-  apps: [{
-    name: 'taxi-manager',
-    script: 'npm',
-    args: 'start',
-    cwd: '/var/www/app.flowcab.fr',
-    instances: 1,
-    autorestart: true,
-    watch: false,
-    max_memory_restart: '1G'
-  }]
-}
-EOF
-fi
+
+# Copier le template de production depuis le deploy
+echo "📝 Copie template ecosystem.config.js..."
+cp deploy/ecosystem.config.prod.js ecosystem.config.js
 
 echo "▶️ Redémarrage de l'application..."
 pm2 start ecosystem.config.js || pm2 restart taxi-manager

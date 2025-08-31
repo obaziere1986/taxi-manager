@@ -7,11 +7,16 @@ Ce fichier fournit une documentation complète pour Claude Code et les développ
 Ce projet Next.js utilise **pnpm** comme gestionnaire de packages. Commandes de base :
 
 ```bash
-pnpm dev          # Serveur de développement (http://localhost:3000)
-pnpm build        # Build de production
-pnpm start        # Serveur de production
-pnpm lint         # Analyse ESLint
+# Développement
+pnpm dev          # Serveur Next.js dev (http://local.app.flowcab.fr:3000)
+pnpm dev:pm2      # PM2 en mode dev avec watch
+pnpm dev:pm2:stop # Arrêt PM2 dev
 pnpm dev:restart  # Redémarrage forcé (kill port 3000)
+
+# Production  
+pnpm build        # Build de production
+pnpm start        # Serveur de production (localhost)
+pnpm lint         # Analyse ESLint
 ```
 
 ### Base de Données
@@ -251,9 +256,42 @@ src/components/
 - **Diversité** : Acteurs d'origines diverses du cinéma français
 - **Interface française** : Dates, heures, statuts, messages d'erreur
 
+## 🔧 Configuration des Environnements
+
+### **Développement Local**
+- **Config PM2** : `ecosystem.config.dev.js` (localhost, watch=true)
+- **Variables** : `.env.local` (local.app.flowcab.fr:3000)
+- **Scripts** : `pnpm dev` ou `pnpm dev:pm2` pour tester PM2
+
+### **Production (app.flowcab.fr)**  
+- **Config PM2** : `deploy/ecosystem.config.prod.js` (template propre)
+- **Variables** : `.env.production.local` (vraies clés Supabase + secrets)
+- **Déploiement** : `./deploy/deploy-app.sh` (script simplifié)
+
+### **Architecture des Fichiers**
+```
+/
+├── ecosystem.config.dev.js     # PM2 développement local
+├── .env.local                  # Variables dev (local.app.flowcab.fr)
+├── .env.production.local       # Variables prod (app.flowcab.fr)
+└── deploy/
+    ├── deploy-app.sh           # Script de déploiement principal  
+    ├── ecosystem.config.prod.js # Template PM2 production
+    ├── nginx-multi-domains.conf # Config nginx app.flowcab.fr
+    └── README-DEPLOY.md        # Documentation déploiement
+```
+
+## 📧 Notifications Email (Hostinger SMTP)
+
+**Configuration Hostinger :**
+- **SMTP** : mail.flowcab.fr:465 (SSL/TLS)
+- **Authentication** : contact@flowcab.fr + mot de passe
+- **Types** : Confirmations, rappels, rapports de course
+- **Templates** : HTML avec CSS inline, responsive
+
 ---
 
-**Dernière mise à jour** : 13 août 2025  
-**Stack** : Next.js 15 + TypeScript + SQLite + Tailwind + shadcn/ui + Recharts  
-**Environnement** : Development avec pnpm + Node.js  
-**Base de données** : SQLite avec seeding complet d'acteurs français
+**Dernière mise à jour** : 31 août 2025  
+**Stack** : Next.js 15 + TypeScript + Supabase + Tailwind + shadcn/ui + Recharts  
+**Environnements** : Dev (local.app.flowcab.fr) + Prod (app.flowcab.fr)  
+**Base de données** : Supabase PostgreSQL avec seeding complet d'acteurs français

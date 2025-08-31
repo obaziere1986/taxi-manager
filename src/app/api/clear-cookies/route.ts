@@ -3,9 +3,8 @@ import { NextResponse } from 'next/server'
 export async function GET() {
   const response = NextResponse.json({ message: 'Cookies cleared' })
   
-  // Supprimer tous les cookies d'authentification
+  // Supprimer tous les cookies NextAuth
   const cookiesToClear = [
-    'auth-token',
     'next-auth.session-token', 
     '__Secure-next-auth.session-token',
     'next-auth.csrf-token',
