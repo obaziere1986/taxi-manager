@@ -35,7 +35,7 @@ jobs:
           # Utilisation de git archive pour éviter complètement les conflits tar
           # Ne prend que les fichiers suivis par git, aucun conflit possible
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
-          git archive --format=tar --prefix=app/ HEAD | gzip > taxi-manager-deploy.tar.gz
+          git archive --format=tar HEAD | gzip > taxi-manager-deploy.tar.gz
 
       - name: 🔑 Setup SSH key
         uses: webfactory/ssh-agent@v0.9.0
@@ -43,12 +43,11 @@ jobs:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
       - name: 📤 Deploy to server
+        shell: bash
         run: |
-          # Configuration SSH
+          set -Eeuo pipefail
           ssh-keyscan -H 69.62.108.105 >> ~/.ssh/known_hosts
-          
-          # Transfer de l'archive
-          scp taxi-manager-deploy.tar.gz root@69.62.108.105:~/taxi-manager-new.tar.gz
+          scp taxi-manager-deploy.tar.gz root@69.62.108.105:/root/taxi-manager-new.tar.gz
           
           # Création du fichier env temporaire
           echo "NODE_ENV=production" > temp_env.txt
@@ -59,71 +58,61 @@ jobs:
           echo "SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" >> temp_env.txt
           
           # Transfer du fichier env
-          scp temp_env.txt root@69.62.108.105:~/temp_env.txt
+          scp temp_env.txt root@69.62.108.105:/root/temp_env.txt
           rm temp_env.txt
           
-          # Déploiement sur le serveur
-          ssh root@69.62.108.105 << 'EOF'
-            set -e
-            
-            echo "🚀 Début du déploiement..."
-            
-            # Backup de l'ancienne version
-            if [ -d "/var/www/app.flowcab.fr" ]; then
-              cp -r /var/www/app.flowcab.fr /var/www/app.flowcab.fr.backup.$(date +%Y%m%d-%H%M%S)
-            fi
-            
-            # Création du répertoire temporaire
-            mkdir -p /var/www/app.flowcab.fr.new
-            cd /var/www/app.flowcab.fr.new
-            
-            # Extraction de la nouvelle version
-            tar -xzf ~/taxi-manager-new.tar.gz --strip-components=1
-            
-            # Copie des variables d'environnement
-            cp ~/temp_env.txt .env.production.local
-            rm ~/temp_env.txt
-            
-            # Installation de toutes les dépendances
-            pnpm install
-            
-            # Nettoyage du cache Next.js
-            rm -rf .next
-            
-            # Build de production sur le serveur
-            NODE_ENV=production pnpm build
-            
-            # Libérer le port 3000
-            lsof -ti:3000 | xargs kill -9 || true
-            
-            # Arrêt de l'ancienne version
-            pm2 stop taxi-manager || true
-            
-            # Correction des permissions avant remplacement
-            chown -R root:root /var/www/app.flowcab.fr.new
-            
-            # Remplacement atomique
-            if [ -d "/var/www/app.flowcab.fr" ]; then
-              mv /var/www/app.flowcab.fr /var/www/app.flowcab.fr.old
-            fi
-            mv /var/www/app.flowcab.fr.new /var/www/app.flowcab.fr
-            
-            # Copie de la configuration PM2
-            cd /var/www/app.flowcab.fr
-            if [ ! -f "ecosystem.config.js" ]; then
-              cp ~/ecosystem.config.js .
-            fi
-            
-            # Relancement de l'application
-            pm2 start ecosystem.config.js || pm2 restart taxi-manager
-            pm2 save
-            
-            # Nettoyage
-            rm -f ~/taxi-manager-new.tar.gz
-            rm -rf /var/www/app.flowcab.fr.old
-            
-            echo '✅ Déploiement terminé avec succès!'
-          "
+          ssh -T root@69.62.108.105 <<'EOSSH'
+set -Eeuo pipefail
+
+echo "🚀 Début du déploiement..."
+
+# Backup si présent
+if [ -d "/var/www/app.flowcab.fr" ]; then
+  cp -r /var/www/app.flowcab.fr /var/www/app.flowcab.fr.backup.$(date +%Y%m%d-%H%M%S)
+fi
+
+# Dossier temporaire
+rm -rf /var/www/app.flowcab.fr.new
+mkdir -p /var/www/app.flowcab.fr.new
+cd /var/www/app.flowcab.fr.new
+
+# Extraction
+tar -xzf /root/taxi-manager-new.tar.gz
+
+# Variables d'environnement
+cp /root/temp_env.txt .env.production.local
+rm /root/temp_env.txt
+
+# Dépendances + build
+pnpm install
+rm -rf .next
+NODE_ENV=production pnpm build
+
+# Libérer port 3000 (sans bruit)
+lsof -ti:3000 | xargs -r kill -9 || true
+
+# Swap atomique
+pm2 stop taxi-manager || true
+chown -R root:root /var/www/app.flowcab.fr.new
+if [ -d "/var/www/app.flowcab.fr" ]; then
+  mv /var/www/app.flowcab.fr /var/www/app.flowcab.fr.old
+fi
+mv /var/www/app.flowcab.fr.new /var/www/app.flowcab.fr
+
+# PM2
+cd /var/www/app.flowcab.fr
+if [ ! -f "ecosystem.config.js" ]; then
+  cp ~/ecosystem.config.js .
+fi
+pm2 start ecosystem.config.js || pm2 restart taxi-manager
+pm2 save
+
+# Nettoyage
+rm -f /root/taxi-manager-new.tar.gz
+rm -rf /var/www/app.flowcab.fr.old || true
+
+echo "✅ Déploiement terminé avec succès!"
+EOSSH
 
       - name: 🧪 Test deployment
         run: |
