@@ -11,6 +11,8 @@
 - 📅 **Planning drag-and-drop** avec courses sur 6 mois
 - ⚙️ **Page paramètres** pour gestion complète du parc et des effectifs
 - 💰 **Suivi des revenus** et KPIs business (30 derniers jours)
+- 🔐 **Authentification sécurisée** avec reset password (email/SMS)
+- 🚀 **Déploiement automatisé** GitHub Actions + SSL/HTTPS
 - 🎬 **Noms d'acteurs français** de toutes générations pour plus d'authenticité
 - 🇫🇷 **Interface entièrement en français** avec dates complètes
 - 🔒 **Sécurité avancée** avec Row Level Security (RLS)
@@ -121,6 +123,16 @@ taxi-manager/
 
 ## 🔒 Sécurité et Authentification
 
+### NextAuth.js + Supabase
+- **Authentification** : Login/email + mot de passe hashé (bcrypt)
+- **Sessions** : JWT strategy, 7 jours, cookies sécurisés
+- **Sécurité** : Rate limiting, account lockout, reset password
+
+### Système Reset Password
+- **Méthodes** : Email ou SMS au choix utilisateur
+- **Sécurité** : Tokens aléatoires 32 bytes, expiration 1h
+- **UX** : Pages dédiées `/forgot-password` et `/reset-password`
+
 ### Row Level Security (RLS)
 Toutes les tables sont protégées par des politiques RLS :
 - **Users** : Accès selon les rôles (Admin, Planner, Chauffeur)
@@ -140,10 +152,14 @@ Toutes les tables sont protégées par des politiques RLS :
 - **Diversité** : Acteurs d'origines diverses du cinéma français
 - **Interface** : Dates françaises, statuts, messages en français
 
-## 🚨 Production & Déploiement
+## 🚀 Production & Infrastructure
 
-### Configuration GitHub Actions
-Le projet utilise GitHub Actions pour le déploiement automatique sur VPS.
+### GitHub Actions CI/CD Automatisé
+**Workflow** : `.github/workflows/deploy.yml`
+- **Déclenchement** : Push sur `main` ou dispatch manuel
+- **Build sécurisé** : git archive + injection secrets
+- **Déploiement zéro-downtime** : swap atomique + PM2
+- **Test post-déploiement** : health check automatique
 
 **Secrets GitHub requis** (Settings > Secrets and Variables > Actions) :
 - `SSH_PRIVATE_KEY` : Clé privée SSH pour connexion VPS
@@ -152,16 +168,18 @@ Le projet utilise GitHub Actions pour le déploiement automatique sur VPS.
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY` : Clé anonyme Supabase
 - `SUPABASE_SERVICE_ROLE_KEY` : Clé service Supabase
 
-**Workflow automatisé** :
-- Déclenchement sur push `main` ou manuel
-- Build sécurisé avec variables d'environnement
-- Déploiement zéro-downtime avec backup automatique
-- Test post-déploiement automatique
-- Rollback en cas d'échec
+### Infrastructure VPS (Hostinger)
+- **Serveur** : Ubuntu 24.04, IP 69.62.108.105
+- **Stack** : Node.js v20 + pnpm + PM2 + nginx
+- **SSL/HTTPS** : Let's Encrypt avec auto-renouvellement
+- **Multi-domaines** : 
+  - `www.flowcab.fr` → Landing page (HTTP)
+  - `app.flowcab.fr` → Taxi Manager (HTTPS)
 
 **Surveillance** :
-- Logs détaillés dans Actions tab
-- Test de santé : `curl -f -L -I https://app.flowcab.fr`
+- Logs GitHub Actions + PM2 + nginx
+- Test santé : `curl -f -L -I https://app.flowcab.fr`
+- Monitoring uptime et performances
 
 ## 🔧 Développement
 
@@ -179,4 +197,6 @@ pnpm test
 ---
 
 **Développé avec ❤️ en France** 🇫🇷  
-*Dernière mise à jour : 26 août 2025 - Version Supabase PostgreSQL*# Déploiement production - sam. 30 août 2025 21:17:42 CEST
+*Dernière mise à jour : 1er septembre 2025*  
+*Stack : Next.js 15 + Supabase + GitHub Actions + SSL/HTTPS*  
+*Infrastructure : VPS Hostinger + PM2 + nginx + Let's Encrypt*

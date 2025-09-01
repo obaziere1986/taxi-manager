@@ -96,6 +96,7 @@ pnpm lint         # Analyse ESLint
 - **Métriques de performance** individuelles
 - **CRUD complet** avec gestion des véhicules
 - **Assignation véhicules** : Système complet avec historique
+- **Authentification sécurisée** : Système de reset password par email/SMS
 
 ### 🚙 Gestion des Véhicules
 - **CRUD complet** : Création, modification, suppression
@@ -132,6 +133,10 @@ pnpm lint         # Analyse ESLint
   ├── courses-timeline/     # Données temporelles
   ├── chauffeur-performance/ # Métriques chauffeurs (30 jours)
   └── revenue-stats/         # Statistiques financières
+/api/auth/             # Authentification & sécurité
+  ├── forgot-password/   # Demande reset password
+  ├── verify-reset-token/ # Vérification token reset
+  └── reset-password/    # Mise à jour mot de passe
 ```
 
 ### Composants
@@ -243,6 +248,9 @@ src/components/
 - **Page paramètres** complète pour gestion utilisateurs/véhicules
 - **APIs robustes** avec retry automatique et gestion d'erreurs
 - **Interface responsive** avec dates complètes partout
+- **Authentification sécurisée** avec reset password (email/SMS)
+- **Déploiement automatisé** GitHub Actions + SSL + nginx
+- **Infrastructure production** VPS + PM2 + monitoring
 
 ### 🔄 En Cours / À Améliorer  
 - Quelques requêtes SQL à optimiser
@@ -256,6 +264,43 @@ src/components/
 - **Diversité** : Acteurs d'origines diverses du cinéma français
 - **Interface française** : Dates, heures, statuts, messages d'erreur
 
+## 🚀 Déploiement & Infrastructure Production
+
+### **GitHub Actions CI/CD**
+- **Workflow** : `.github/workflows/deploy.yml`
+- **Déclenchement** : Push sur `main` ou manual dispatch
+- **Secrets requis** (GitHub Settings > Secrets and Variables > Actions) :
+  - `SSH_PRIVATE_KEY` : Clé privée SSH pour connexion VPS
+  - `NEXTAUTH_SECRET` : Secret NextAuth généré
+  - `NEXT_PUBLIC_SUPABASE_URL` : URL du projet Supabase
+  - `NEXT_PUBLIC_SUPABASE_ANON_KEY` : Clé anonyme Supabase
+  - `SUPABASE_SERVICE_ROLE_KEY` : Clé service Supabase
+
+### **Infrastructure VPS (Hostinger)**
+- **Serveur** : Ubuntu 24.04, IP 69.62.108.105
+- **Node.js** : v20 LTS + pnpm global
+- **PM2** : Gestionnaire de processus avec auto-restart
+- **Nginx** : Reverse proxy avec SSL termination
+- **SSL** : Let's Encrypt avec auto-renouvellement
+
+### **Configuration Nginx Multi-Domaines**
+- **www.flowcab.fr** : Landing page statique (HTTP)
+- **app.flowcab.fr** : Application Taxi Manager (HTTPS)
+- **Fichier config** : `deploy/nginx-multi-domains.conf`
+- **SSL automatique** : Certificats Let's Encrypt
+- **Security headers** : HSTS, CSP, XSS protection
+
+### **Processus de Déploiement Automatisé**
+1. **Build & Archive** : `git archive` pour éviter conflits tar
+2. **Transfer sécurisé** : SSH + SCP des fichiers
+3. **Injection secrets** : Variables d'environnement depuis GitHub
+4. **Déploiement zéro-downtime** :
+   - Création dossier temporaire `/var/www/app.flowcab.fr.new`
+   - Installation deps + build avec vraies variables
+   - Arrêt PM2 + swap atomique des dossiers
+   - Redémarrage PM2 + configuration nginx
+5. **Post-déploiement** : Test santé + nettoyage
+
 ## 🔧 Configuration des Environnements
 
 ### **Développement Local**
@@ -266,7 +311,9 @@ src/components/
 ### **Production (app.flowcab.fr)**  
 - **Config PM2** : `deploy/ecosystem.config.prod.js` (template propre)
 - **Variables** : `.env.production.local` (vraies clés Supabase + secrets)
-- **Déploiement** : `./deploy/deploy-app.sh` (script simplifié)
+- **Déploiement automatisé** : GitHub Actions + `./deploy/deploy-app.sh`
+- **SSL/HTTPS** : Let's Encrypt (certbot) + nginx reverse proxy
+- **VPS** : Ubuntu 24.04, IP 69.62.108.105 (Hostinger)
 
 ### **Architecture des Fichiers**
 ```
@@ -291,7 +338,25 @@ src/components/
 
 ---
 
-**Dernière mise à jour** : 31 août 2025  
+## 🔒 Sécurité & Authentification
+
+### **NextAuth.js + Supabase**
+- **Provider** : Credentials avec login/email + mot de passe
+- **Sessions** : JWT strategy, 7 jours d'expiration
+- **Sécurité** : bcrypt (12 rounds), rate limiting, account lockout
+- **Cookies sécurisés** : HttpOnly, Secure en production
+
+### **Reset Password Système**
+- **Méthodes** : Email ou SMS au choix
+- **Tokens sécurisés** : 32 bytes hex, expiration 1h
+- **Pages dédiées** : `/forgot-password` + `/reset-password`
+- **Validation** : Vérification token + politique mots de passe
+- **Base de données** : Colonnes `reset_token` + `reset_token_expiry`
+
+---
+
+**Dernière mise à jour** : 1er septembre 2025  
 **Stack** : Next.js 15 + TypeScript + Supabase + Tailwind + shadcn/ui + Recharts  
-**Environnements** : Dev (local.app.flowcab.fr) + Prod (app.flowcab.fr)  
+**Environnements** : Dev (localhost:3000) + Prod (app.flowcab.fr avec SSL)  
+**Infrastructure** : VPS Hostinger + GitHub Actions + PM2 + Nginx + Let's Encrypt
 **Base de données** : Supabase PostgreSQL avec seeding complet d'acteurs français

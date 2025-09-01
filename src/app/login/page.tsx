@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { ForgotPasswordModal } from "@/components/ui/forgot-password-modal"
 
 export default function LoginPage() {
   const router = useRouter()
@@ -18,6 +19,7 @@ export default function LoginPage() {
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [showForgotModal, setShowForgotModal] = useState(false)
 
   // Fix hydratation mismatch
   useEffect(() => {
@@ -77,7 +79,7 @@ export default function LoginPage() {
                 id="email"
                 name="email"
                 type="email"
-                placeholder="jean.dujardin@taxicompany.fr"
+                placeholder="Identifiant"
                 value={formData.email}
                 onChange={handleChange}
                 required
@@ -90,7 +92,7 @@ export default function LoginPage() {
                 id="password"
                 name="password"
                 type="password"
-                placeholder="password123"
+                placeholder="Mot de passe"
                 value={formData.password}
                 onChange={handleChange}
                 required
@@ -107,10 +109,26 @@ export default function LoginPage() {
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? 'Connexion...' : 'Se connecter'}
             </Button>
+            
+            <div className="text-center mt-4">
+              <button 
+                type="button"
+                onClick={() => setShowForgotModal(true)}
+                className="text-sm text-gray-600 hover:text-gray-800 underline"
+                disabled={loading}
+              >
+                Mot de passe oublié ?
+              </button>
+            </div>
           </form>
           
         </CardContent>
       </Card>
+
+      <ForgotPasswordModal 
+        isOpen={showForgotModal} 
+        onClose={() => setShowForgotModal(false)} 
+      />
     </div>
   )
 }

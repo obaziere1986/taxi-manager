@@ -60,3 +60,4 @@ prisma/dev.db-journal
 
 /src/generated/prisma
 node_modules
+*.tar.gz
